@@ -1,0 +1,8 @@
+[tool.uv.workspace]
+members = ["script"]
+
+[dependency-groups]
+minted = [
+    "pygments>=2.19.2",
+    "pygments-style-github>=0.4",
+]

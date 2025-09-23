@@ -2,7 +2,7 @@
 name = "ctfp-latex-tools"
 version = "0.1.0"
 description = "Utilities for parsing the src/content LaTeX subset"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [
   { name = "CTFP Editors" }
 ]
