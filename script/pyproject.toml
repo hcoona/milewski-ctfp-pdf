@@ -1,0 +1,15 @@
+[project]
+name = "ctfp-latex-tools"
+version = "0.1.0"
+description = "Utilities for parsing the src/content LaTeX subset"
+requires-python = ">=3.11"
+authors = [
+  { name = "CTFP Editors" }
+]
+dependencies = []
+
+[project.scripts]
+ctfp-parse = "ctfp_latex_parser.cli:main"
+
+[tool.uv]
+package = true
