@@ -7,6 +7,7 @@ from typing import Iterable
 
 from .analysis import document_stats
 from .loader import parse_directory
+from .renderers import render_asciidoc_documents
 
 
 def format_summary(documents: Iterable) -> str:
@@ -35,9 +36,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--format",
-        choices=("summary", "json"),
+        choices=("summary", "json", "asciidoc"),
         default="summary",
-        help="Output format. Summary prints counts, json emits full AST.",
+        help="Output format. Summary prints counts, json emits full AST, asciidoc renders text.",
     )
     parser.add_argument(
         "--pretty",
@@ -65,9 +66,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.format == "summary":
         output = format_summary(documents)
-    else:
+    elif args.format == "json":
         payload = [document.to_dict() for document in documents]
         output = json.dumps(payload, indent=2 if args.pretty else None, ensure_ascii=False)
+    else:
+        output = render_asciidoc_documents(documents)
 
     if args.output:
         args.output.write_text(output, encoding="utf-8")

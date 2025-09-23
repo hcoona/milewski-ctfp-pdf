@@ -14,6 +14,7 @@ from .nodes import (
     Text,
 )
 from .parser import LatexParser, parse_text
+from .renderers import render_asciidoc_document, render_asciidoc_documents
 
 __all__ = [
     "Argument",
@@ -31,4 +32,6 @@ __all__ = [
     "parse_directory",
     "parse_file",
     "parse_text",
+    "render_asciidoc_document",
+    "render_asciidoc_documents",
 ]
