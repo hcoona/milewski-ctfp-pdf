@@ -33,6 +33,23 @@ class AsciiDocRenderer:
         ("reason", "re"),
         ("scala", "scala"),
     )
+    _MATH_SIMPLE_MACROS: dict[str, str] = {
+        "Set": r"\mathbf{Set}",
+        "Rel": r"\mathbf{Rel}",
+        "Cat": r"\mathbf{Cat}",
+        "id": r"\mathbf{id}",
+        "Ran": r"\mathbf{Ran}",
+        "Lan": r"\mathbf{Lan}",
+        "Hask": r"\mathbf{Hask}",
+    }
+    _MATH_SIMPLE_MACRO_PATTERNS: dict[str, re.Pattern[str]] = {
+        name: re.compile(rf"\\{name}(?=\\b|[^a-zA-Z])")
+        for name in _MATH_SIMPLE_MACROS
+    }
+    _RE_CAT = re.compile(r"\\cat\s*\{([^{}]*)\}")
+    _RE_IDARROW = re.compile(r"\\idarrow(?:\[(.*?)\])?")
+    _RE_LIM = re.compile(r"\\Lim(?:\[(.*?)\])?")
+    _RE_FOP = re.compile(r"\\Fop\b")
 
     def __init__(self, *, expand_snippet_languages: Sequence[str] | None = None) -> None:
         self._current_document: Document | None = None
@@ -96,6 +113,8 @@ class AsciiDocRenderer:
             return "#"
         if name == "par":
             return "\n\n"
+        if name == "Colon":
+            return "∷"
         if name in {"_", "textunderscore"}:
             return "_"
         if name in {"textbf", "newterm"}:
@@ -146,7 +165,7 @@ class AsciiDocRenderer:
             return f"xref:{target}[]"
         if name == "ensuremath":
             expr = self._argument(command, 0, kind="required")
-            return f"latexmath:[{expr}]"
+            return f"latexmath:[{self._expand_math_macros(expr)}]"
         if name == "ldots":
             return "..."
         if name == "lettrine":
@@ -219,10 +238,41 @@ class AsciiDocRenderer:
         return "".join(parts)
 
     def _render_math(self, math: Math) -> str:
-        content = math.content.strip()
+        content = self._expand_math_macros(math.content).strip()
         if math.kind == "inline":
             return f"latexmath:[{content}]"
         return f"[latexmath]\n++++\n{content}\n++++\n\n"
+
+    def _expand_math_macros(self, content: str) -> str:
+        def replace_cat(match: re.Match[str]) -> str:
+            argument = match.group(1)
+            return rf"\mathbf{{{argument}}}"
+
+        def replace_idarrow(match: re.Match[str]) -> str:
+            argument = match.group(1)
+            if argument:
+                return rf"\mathbf{{id}}_{{{argument}}}"
+            return r"\mathbf{id}"
+
+        def replace_lim(match: re.Match[str]) -> str:
+            argument = match.group(1)
+            if argument:
+                return rf"\mathbf{{Lim}}{{{argument}}}"
+            return r"\mathbf{Lim}"
+
+        def replace_fop(_: re.Match[str]) -> str:
+            return r"\mathbf{F}^{\mathit{op}}"
+
+        expanded = self._RE_CAT.sub(replace_cat, content)
+        expanded = self._RE_IDARROW.sub(replace_idarrow, expanded)
+        expanded = self._RE_LIM.sub(replace_lim, expanded)
+        expanded = self._RE_FOP.sub(replace_fop, expanded)
+        for name, replacement in self._MATH_SIMPLE_MACROS.items():
+            pattern = self._MATH_SIMPLE_MACRO_PATTERNS[name]
+            expanded = pattern.sub(lambda _: replacement, expanded)
+        expanded = expanded.replace(r"\symbf", r"\mathbf")
+        expanded = expanded.replace(r"\Colon", "∷")
+        return expanded
 
     def _render_list(self, children: Sequence[Node], *, numbered: bool) -> str:
         self._list_depth += 1
