@@ -38,6 +38,7 @@ class AsciiDocRenderer:
         self._current_document: Document | None = None
         allowed_languages = {language for language, _ in self._SNIPPET_LANGUAGES}
         self._expand_snippet_languages: set[str] = {"haskell"}
+        self._list_depth = 0
         if expand_snippet_languages:
             for raw_language in expand_snippet_languages:
                 language = raw_language.strip().lower()
@@ -179,7 +180,7 @@ class AsciiDocRenderer:
         if name in {"enumerate", "itemize"}:
             numbered = name == "enumerate"
             return self._render_list(environment.children, numbered=numbered)
-        if name in {"snip", "snipv", "verbatim", "Verbatim"}:
+        if name in {"snip", "snipv", "verbatim", "Verbatim", "minted"}:
             language = self._argument(environment, 0, kind="required")
             body = self._render_code_block(environment.children)
             header = f"[source,{language}]" if language else "[source]"
@@ -219,54 +220,62 @@ class AsciiDocRenderer:
         return f"[latexmath]\n++++\n{content}\n++++\n\n"
 
     def _render_list(self, children: Sequence[Node], *, numbered: bool) -> str:
-        items: list[_ListItem] = []
-        current: list[Node] = []
-        for node in children:
-            if isinstance(node, Command) and node.name == "item":
-                if current:
-                    items.append(_ListItem(nodes=current))
-                current = []
-                continue
-            current.append(node)
-        if current:
-            items.append(_ListItem(nodes=current))
-        lines: list[str] = []
-        counter = 0
-        for item in items:
-            rendered = self._render_nodes(item.nodes).strip()
-            if not rendered:
-                continue
-            blocks = self._split_list_item_blocks(rendered)
-            if not blocks:
-                continue
-            counter += 1
-            prefix = f"{counter}. " if numbered else "* "
-            item_lines: list[str] = []
-            for index, block in enumerate(blocks):
-                block_is_block_level = self._is_block_level(block)
-                normalized_block = self._normalize_block_lines(
-                    block,
-                    block_level=block_is_block_level,
-                )
-                if not normalized_block:
+        self._list_depth += 1
+        try:
+            items: list[_ListItem] = []
+            current: list[Node] = []
+            for node in children:
+                if isinstance(node, Command) and node.name == "item":
+                    if current:
+                        items.append(_ListItem(nodes=current))
+                    current = []
                     continue
-                if index == 0:
-                    if not block_is_block_level:
-                        first_line, *rest_lines = normalized_block
-                        item_lines.append(prefix + first_line)
-                        item_lines.extend(rest_lines)
-                    else:
-                        item_lines.append(prefix.strip())
+                current.append(node)
+            if current:
+                items.append(_ListItem(nodes=current))
+            lines: list[str] = []
+            counter = 0
+            for item in items:
+                rendered = self._render_nodes(item.nodes).strip()
+                if not rendered:
+                    continue
+                blocks = self._split_list_item_blocks(rendered)
+                if not blocks:
+                    continue
+                counter += 1
+                if numbered:
+                    prefix = "." * self._list_depth + " "
+                else:
+                    prefix = "*" * self._list_depth + " "
+                item_lines: list[str] = []
+                for index, block in enumerate(blocks):
+                    block_is_block_level = self._is_block_level(block)
+                    normalized_block = self._normalize_block_lines(
+                        block,
+                        block_level=block_is_block_level,
+                    )
+                    if not normalized_block:
+                        continue
+                    if index == 0:
+                        if not block_is_block_level:
+                            first_line, *rest_lines = normalized_block
+                            item_lines.append(prefix + first_line)
+                            item_lines.extend(rest_lines)
+                        else:
+                            marker = prefix.strip()
+                            item_lines.append(f"{marker} {{empty}}" if marker else "{empty}")
+                            item_lines.append("+")
+                            item_lines.extend(normalized_block)
+                        continue
+                    if item_lines and item_lines[-1] != "+":
                         item_lines.append("+")
-                        item_lines.extend(normalized_block)
-                    continue
-                if item_lines and item_lines[-1] != "+":
-                    item_lines.append("+")
-                item_lines.extend(normalized_block)
-            lines.extend(item_lines)
-        if not lines:
-            return ""
-        return "\n".join(lines) + "\n\n"
+                    item_lines.extend(normalized_block)
+                lines.extend(item_lines)
+            if not lines:
+                return ""
+            return "\n".join(lines) + "\n\n"
+        finally:
+            self._list_depth -= 1
 
     def _split_list_item_blocks(self, rendered: str) -> list[list[str]]:
         blocks: list[list[str]] = []
@@ -302,6 +311,25 @@ class AsciiDocRenderer:
             blocks.append(current)
         return blocks
 
+    def _is_list_marker_line(self, stripped: str) -> bool:
+        if not stripped:
+            return False
+        if stripped.startswith("."):
+            if len(stripped) > 1 and stripped[1].isalnum():
+                return True
+            index = 0
+            while index < len(stripped) and stripped[index] == ".":
+                index += 1
+            if index > 0 and index < len(stripped) and stripped[index].isspace():
+                return True
+        if stripped.startswith("*"):
+            index = 0
+            while index < len(stripped) and stripped[index] == "*":
+                index += 1
+            if index > 0 and index < len(stripped) and stripped[index].isspace():
+                return True
+        return False
+
     def _is_block_starter_line(self, stripped: str) -> bool:
         if not stripped:
             return False
@@ -311,7 +339,7 @@ class AsciiDocRenderer:
             return True
         if stripped.startswith("["):
             return True
-        if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+        if self._is_list_marker_line(stripped):
             return True
         if stripped.startswith("image::") or stripped.startswith("video::"):
             return True
@@ -330,7 +358,7 @@ class AsciiDocRenderer:
                 return True
             if stripped.startswith("["):
                 return True
-            if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+            if self._is_list_marker_line(stripped):
                 return True
             if stripped.startswith("image::") or stripped.startswith("video::"):
                 return True
@@ -348,7 +376,7 @@ class AsciiDocRenderer:
             return True
         if stripped.startswith("["):
             return True
-        if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+        if self._is_list_marker_line(stripped):
             return True
         if stripped.startswith("image::") or stripped.startswith("video::"):
             return True
