@@ -81,10 +81,38 @@ class AsciiDocRenderer:
         return "\n\n////\n\n".join(rendered) + "\n"
 
     def _render_nodes(self, nodes: Sequence[Node], *, inline: bool = False) -> str:
+        node_list = list(nodes)
         chunks: list[str] = []
-        for node in nodes:
-            chunks.append(self._render_node(node, inline=inline))
+        for index, node in enumerate(node_list):
+            rendered = self._render_node(node, inline=inline)
+            if isinstance(node, Command) and node.name in {"texttt", "code"}:
+                if self._should_use_double_backticks(node_list, index):
+                    rendered = self._ensure_double_backticks(rendered)
+            chunks.append(rendered)
         return "".join(chunks)
+
+    def _should_use_double_backticks(self, nodes: Sequence[Node], index: int) -> bool:
+        if index + 1 >= len(nodes):
+            return False
+        next_node = nodes[index + 1]
+        if isinstance(next_node, Text):
+            content = next_node.content
+            if not content:
+                return False
+            ch = content[0]
+            if ch.isspace():
+                return False
+            if ch == "'":
+                return len(content) > 1 and content[1].isalnum()
+            return ch.isalnum()
+        return False
+
+    def _ensure_double_backticks(self, rendered: str) -> str:
+        if rendered.startswith("``") and rendered.endswith("``"):
+            return rendered
+        if rendered.startswith("`") and rendered.endswith("`"):
+            return f"``{rendered[1:-1]}``"
+        return rendered
 
     def _escape_text(self, text: str) -> str:
         text = self._DOUBLE_QUOTE_PATTERN.sub(lambda match: f'"{match.group(1)}"', text)
