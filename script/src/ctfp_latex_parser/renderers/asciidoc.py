@@ -23,6 +23,8 @@ class _ListItem:
 
 
 class AsciiDocRenderer:
+    _BLOCK_DELIMITERS = {"----", "++++", "....", "____", "****"}
+
     def __init__(self) -> None:
         self._current_document: Document | None = None
 
@@ -208,16 +210,137 @@ class AsciiDocRenderer:
             rendered = self._render_nodes(item.nodes).strip()
             if not rendered:
                 continue
+            blocks = self._split_list_item_blocks(rendered)
+            if not blocks:
+                continue
             counter += 1
-            rendered_lines = rendered.splitlines()
-            first_line = rendered_lines[0].lstrip()
-            rest_lines = [line.lstrip() for line in rendered_lines[1:]]
             prefix = f"{counter}. " if numbered else "* "
-            lines.append(prefix + first_line)
-            lines.extend(rest_lines)
+            item_lines: list[str] = []
+            for index, block in enumerate(blocks):
+                block_is_block_level = self._is_block_level(block)
+                normalized_block = self._normalize_block_lines(
+                    block,
+                    block_level=block_is_block_level,
+                )
+                if not normalized_block:
+                    continue
+                if index == 0:
+                    if not block_is_block_level:
+                        first_line, *rest_lines = normalized_block
+                        item_lines.append(prefix + first_line)
+                        item_lines.extend(rest_lines)
+                    else:
+                        item_lines.append(prefix.strip())
+                        item_lines.append("+")
+                        item_lines.extend(normalized_block)
+                    continue
+                if item_lines and item_lines[-1] != "+":
+                    item_lines.append("+")
+                item_lines.extend(normalized_block)
+            lines.extend(item_lines)
         if not lines:
             return ""
         return "\n".join(lines) + "\n\n"
+
+    def _split_list_item_blocks(self, rendered: str) -> list[list[str]]:
+        blocks: list[list[str]] = []
+        current: list[str] = []
+        delimiter: str | None = None
+        for line in rendered.splitlines():
+            stripped = line.strip()
+            if delimiter:
+                current.append(line)
+                if stripped == delimiter:
+                    delimiter = None
+                continue
+            if stripped in self._BLOCK_DELIMITERS:
+                if not current:
+                    current = [line]
+                else:
+                    current.append(line)
+                delimiter = stripped
+                continue
+            if self._is_block_starter_line(stripped):
+                if current:
+                    blocks.append(current)
+                    current = []
+                current.append(line)
+                continue
+            if not stripped:
+                if current:
+                    blocks.append(current)
+                    current = []
+                continue
+            current.append(line)
+        if current:
+            blocks.append(current)
+        return blocks
+
+    def _is_block_starter_line(self, stripped: str) -> bool:
+        if not stripped:
+            return False
+        if stripped.startswith("[[") and stripped.endswith("]]"):
+            return False
+        if stripped in self._BLOCK_DELIMITERS:
+            return True
+        if stripped.startswith("["):
+            return True
+        if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+            return True
+        if stripped.startswith("image::") or stripped.startswith("video::"):
+            return True
+        if stripped.startswith("include::"):
+            return True
+        return False
+
+    def _is_block_level(self, block: Sequence[str]) -> bool:
+        for line in block:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("[[") and stripped.endswith("]]"):
+                continue
+            if stripped in self._BLOCK_DELIMITERS:
+                return True
+            if stripped.startswith("["):
+                return True
+            if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+                return True
+            if stripped.startswith("image::") or stripped.startswith("video::"):
+                return True
+            if stripped.startswith("include::"):
+                return True
+            return False
+        return False
+
+    def _should_trim_block_line(self, stripped: str) -> bool:
+        if not stripped:
+            return True
+        if stripped.startswith("[[") and stripped.endswith("]]"):
+            return True
+        if stripped in self._BLOCK_DELIMITERS:
+            return True
+        if stripped.startswith("["):
+            return True
+        if stripped.startswith(".") and len(stripped) > 1 and stripped[1].isalnum():
+            return True
+        if stripped.startswith("image::") or stripped.startswith("video::"):
+            return True
+        if stripped.startswith("include::"):
+            return True
+        return False
+
+    def _normalize_block_lines(self, block: Sequence[str], *, block_level: bool) -> list[str]:
+        if block_level:
+            normalized: list[str] = []
+            for line in block:
+                stripped = line.strip()
+                if self._should_trim_block_line(stripped):
+                    normalized.append(line.lstrip())
+                else:
+                    normalized.append(line)
+            return normalized
+        return [line.lstrip() for line in block]
 
     def _render_figure(self, environment: Environment) -> str:
         image_path: str | None = None
