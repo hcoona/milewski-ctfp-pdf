@@ -55,6 +55,15 @@ def main(argv: list[str] | None = None) -> int:
         type=int,
         help="If provided, only parse the first N documents.",
     )
+    parser.add_argument(
+        "--expand-snippet-language",
+        action="append",
+        choices=("ocaml", "reason", "scala"),
+        help=(
+            "Additional snippet languages to expand alongside Haskell. "
+            "Repeat the flag to include multiple languages."
+        ),
+    )
     args = parser.parse_args(argv)
 
     documents = parse_directory(args.root)
@@ -64,13 +73,18 @@ def main(argv: list[str] | None = None) -> int:
     if not documents:
         raise SystemExit(f"No LaTeX files found below {args.root}")
 
+    extra_languages = args.expand_snippet_language or []
+
     if args.format == "summary":
         output = format_summary(documents)
     elif args.format == "json":
         payload = [document.to_dict() for document in documents]
         output = json.dumps(payload, indent=2 if args.pretty else None, ensure_ascii=False)
     else:
-        output = render_asciidoc_documents(documents)
+        output = render_asciidoc_documents(
+            documents,
+            expand_snippet_languages=extra_languages,
+        )
 
     if args.output:
         args.output.write_text(output, encoding="utf-8")

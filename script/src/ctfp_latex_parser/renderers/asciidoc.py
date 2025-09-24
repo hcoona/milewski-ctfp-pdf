@@ -24,9 +24,22 @@ class _ListItem:
 
 class AsciiDocRenderer:
     _BLOCK_DELIMITERS = {"----", "++++", "....", "____", "****"}
+    _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
+        ("haskell", "hs"),
+        ("ocaml", "ml"),
+        ("reason", "re"),
+        ("scala", "scala"),
+    )
 
-    def __init__(self) -> None:
+    def __init__(self, *, expand_snippet_languages: Sequence[str] | None = None) -> None:
         self._current_document: Document | None = None
+        allowed_languages = {language for language, _ in self._SNIPPET_LANGUAGES}
+        self._expand_snippet_languages: set[str] = {"haskell"}
+        if expand_snippet_languages:
+            for raw_language in expand_snippet_languages:
+                language = raw_language.strip().lower()
+                if language in allowed_languages:
+                    self._expand_snippet_languages.add(language)
 
     def render_document(self, document: Document) -> str:
         self._current_document = document
@@ -111,8 +124,11 @@ class AsciiDocRenderer:
         if name == "src":
             target = self._argument(command, 0, kind="required")
             suffix = self._argument(command, 0, kind="optional")
-            if suffix:
-                return f"xref:{target}[{suffix}]"
+            if not target:
+                return ""
+            snippet = self._render_snippet_includes(target, suffix)
+            if snippet is not None:
+                return snippet
             return f"xref:{target}[]"
         if name == "ensuremath":
             expr = self._argument(command, 0, kind="required")
@@ -345,6 +361,33 @@ class AsciiDocRenderer:
     def _normalize_caption(self, caption: str) -> str:
         return " ".join(caption.split())
 
+    def _render_snippet_includes(self, identifier: str, option: str | None) -> str | None:
+        document = self._current_document
+        if document is None:
+            return None
+        base_dir = document.path.parent
+        blocks: list[str] = []
+        # Optional LaTeX arguments (for example "b" to enable breaklines) are ignored in AsciiDoc output.
+        _ = (option or "").strip()
+        for language, extension in self._SNIPPET_LANGUAGES:
+            if language not in self._expand_snippet_languages:
+                continue
+            relative_path = Path("code") / language / f"{identifier}.{extension}"
+            absolute_path = base_dir / relative_path
+            if not absolute_path.exists():
+                continue
+            include_path = relative_path.as_posix()
+            block_lines = [
+                f"[source,{language}]",
+                "----",
+                f"include::{include_path}[]",
+                "----",
+            ]
+            blocks.append("\n".join(block_lines))
+        if not blocks:
+            return None
+        return "\n\n".join(blocks) + "\n"
+
     def _render_figure(self, environment: Environment) -> str:
         image_path: str | None = None
         caption: str | None = None
@@ -396,11 +439,19 @@ class AsciiDocRenderer:
         return title or path.stem
 
 
-def render_asciidoc_document(document: Document) -> str:
-    renderer = AsciiDocRenderer()
+def render_asciidoc_document(
+    document: Document,
+    *,
+    expand_snippet_languages: Sequence[str] | None = None,
+) -> str:
+    renderer = AsciiDocRenderer(expand_snippet_languages=expand_snippet_languages)
     return renderer.render_document(document)
 
 
-def render_asciidoc_documents(documents: Iterable[Document]) -> str:
-    renderer = AsciiDocRenderer()
+def render_asciidoc_documents(
+    documents: Iterable[Document],
+    *,
+    expand_snippet_languages: Sequence[str] | None = None,
+) -> str:
+    renderer = AsciiDocRenderer(expand_snippet_languages=expand_snippet_languages)
     return renderer.render_documents(list(documents))
