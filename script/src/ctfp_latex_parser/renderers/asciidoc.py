@@ -342,6 +342,9 @@ class AsciiDocRenderer:
             return normalized
         return [line.lstrip() for line in block]
 
+    def _normalize_caption(self, caption: str) -> str:
+        return " ".join(caption.split())
+
     def _render_figure(self, environment: Environment) -> str:
         image_path: str | None = None
         caption: str | None = None
@@ -354,8 +357,9 @@ class AsciiDocRenderer:
                 elif node.name == "caption":
                     caption = self._argument(node, 0, kind="required")
         lines: list[str] = []
-        if caption:
-            lines.append(f".{caption}")
+        normalized_caption = self._normalize_caption(caption) if caption else None
+        if normalized_caption:
+            lines.append(f".{normalized_caption}")
         if image_path:
             lines.append(f"image::{image_path}[]")
         else:
