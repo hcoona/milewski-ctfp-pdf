@@ -96,6 +96,8 @@ class AsciiDocRenderer:
             return "#"
         if name == "par":
             return "\n\n"
+        if name in {"_", "textunderscore"}:
+            return "_"
         if name in {"textbf", "newterm"}:
             text = self._argument(command, 0, kind="required")
             return f"*{text}*"
