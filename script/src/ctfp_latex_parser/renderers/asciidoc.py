@@ -88,6 +88,7 @@ class AsciiDocRenderer:
         text = self._DOUBLE_QUOTE_PATTERN.sub(lambda match: f'"{match.group(1)}"', text)
         text = text.replace("``", '"').replace("''", '"')
         text = text.replace("C++", "{cpp}")
+        text = text.replace("---", "--")
         return text.replace(r"\#", "#")
 
     def _render_node(self, node: Node, *, inline: bool) -> str:
