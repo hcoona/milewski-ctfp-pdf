@@ -57,6 +57,7 @@ class AsciiDocRenderer:
         allowed_languages = {language for language, _ in self._SNIPPET_LANGUAGES}
         self._expand_snippet_languages: set[str] = {"haskell"}
         self._list_depth = 0
+        self._math_block_depth = 0
         if expand_snippet_languages:
             for raw_language in expand_snippet_languages:
                 language = raw_language.strip().lower()
@@ -110,6 +111,8 @@ class AsciiDocRenderer:
     def _render_command(self, command: Command, *, inline: bool) -> str:
         name = command.name
         if name == "\\":
+            if self._math_block_depth > 0:
+                return "\\\\\n"
             return "\n"
         if name == "#":
             return "#"
@@ -217,8 +220,15 @@ class AsciiDocRenderer:
             return f"{header}\n----\n{body}\n----\n\n"
         if name == "figure":
             return self._render_figure(environment)
-        if name in {"align", "equation"}:
-            body = self._render_nodes(environment.children).strip()
+        if name in {"align", "align*", "equation", "equation*", "gather", "gather*"}:
+            self._math_block_depth += 1
+            try:
+                body = self._render_nodes(environment.children)
+            finally:
+                self._math_block_depth -= 1
+            body = re.sub(r"\n\s*\n", "\n", body)
+            lines = [part.strip() for part in body.splitlines()]
+            body = "\n".join(lines).strip()
             return f"[latexmath]\n++++\n{body}\n++++\n\n"
         return self._render_nodes(environment.children)
 
