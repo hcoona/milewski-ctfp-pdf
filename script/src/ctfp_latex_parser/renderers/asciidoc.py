@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import textwrap
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +28,8 @@ class _ListItem:
 class AsciiDocRenderer:
     _BLOCK_DELIMITERS = {"----", "++++", "....", "____", "****"}
     _DOUBLE_QUOTE_PATTERN = re.compile(r"``([^`]*?)''")
+    _CODE_SPAN_PATTERN = re.compile(r"(``?)([^`]*?)(\1)")
+    _LATEXMATH_SPAN_PATTERN = re.compile(r"(latexmath:\[)(.*?)(?<!\\)(\])", re.DOTALL)
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
         ("ocaml", "ml"),
@@ -120,6 +123,21 @@ class AsciiDocRenderer:
         text = text.replace("C++", "{cpp}")
         text = text.replace("---", "--")
         return text.replace(r"\#", "#")
+
+    def _escape_table_cell_code_pipes(self, cell: str) -> str:
+        def escape_code(match: re.Match[str]) -> str:
+            opening, content, closing = match.groups()
+            escaped = re.sub(r"(?<!\\)\|", r"\\|", content)
+            return f"{opening}{escaped}{closing}"
+
+        def escape_math(match: re.Match[str]) -> str:
+            opening, content, closing = match.groups()
+            escaped = re.sub(r"(?<!\\)\|", r"\\|", content)
+            return f"{opening}{escaped}{closing}"
+
+        cell = self._CODE_SPAN_PATTERN.sub(escape_code, cell)
+        cell = self._LATEXMATH_SPAN_PATTERN.sub(escape_math, cell)
+        return cell
 
     def _render_node(self, node: Node, *, inline: bool) -> str:
         if isinstance(node, Text):
@@ -222,6 +240,8 @@ class AsciiDocRenderer:
             return ""
         if name == "noindent":
             return ""
+        if name in {"raggedright", "strut"}:
+            return ""
         if name == "includegraphics":
             if command.arguments:
                 path_text = self._render_nodes(command.arguments[-1].children, inline=True).strip()
@@ -248,6 +268,8 @@ class AsciiDocRenderer:
             return f"{header}\n----\n{body}\n----\n\n"
         if name == "figure":
             return self._render_figure(environment)
+        if name == "longtable":
+            return self._render_longtable(environment)
         if name in {"align", "align*", "equation", "equation*", "gather", "gather*"}:
             self._math_block_depth += 1
             try:
@@ -625,6 +647,148 @@ class AsciiDocRenderer:
             if fallback:
                 lines.append(fallback)
         return "\n".join(lines) + "\n\n"
+
+    def _render_longtable(self, environment: Environment) -> str:
+        caption: str | None = None
+        label: str | None = None
+        rows: list[list[str]] = []
+        current_cell_nodes: list[Node] = []
+        current_row_cells: list[str] = []
+        header_row_count = 0
+        max_columns = 0
+
+        column_spec = self._argument(environment, 0, kind="required")
+        column_markers = re.findall(r"[lcr]", column_spec)
+        minipage_env: Environment | None = None
+        special_case_allowed_commands = {"toprule", "midrule", "bottomrule", "tabularnewline"}
+
+        def only_whitespace(text_node: Text) -> bool:
+            return not text_node.content.strip()
+
+        special_case_possible = len(column_markers) == 1
+
+        if special_case_possible:
+            for node in environment.children:
+                if isinstance(node, Environment) and node.name == "minipage":
+                    if minipage_env is not None:
+                        special_case_possible = False
+                        break
+                    minipage_env = node
+                    continue
+                if isinstance(node, Command):
+                    if node.name in special_case_allowed_commands:
+                        continue
+                    special_case_possible = False
+                    break
+                if isinstance(node, Text):
+                    if only_whitespace(node):
+                        continue
+                    special_case_possible = False
+                    break
+                else:
+                    special_case_possible = False
+                    break
+
+        if special_case_possible and minipage_env is not None:
+            raw_body = self._render_nodes(minipage_env.children)
+            dedented = textwrap.dedent(raw_body)
+            body = "\n".join(line.lstrip() for line in dedented.splitlines()).strip()
+            if not body:
+                return ""
+            lines = ["[.longtable-panel]", "====", body, "====", ""]
+            return "\n".join(lines)
+
+        def flush_cell() -> None:
+            nonlocal current_cell_nodes, current_row_cells
+            rendered = self._render_nodes(current_cell_nodes, inline=True).strip()
+            current_row_cells.append(rendered)
+            current_cell_nodes = []
+
+        def flush_row() -> None:
+            nonlocal current_cell_nodes, current_row_cells, rows, max_columns
+            if current_cell_nodes:
+                flush_cell()
+            if not current_row_cells:
+                return
+            if all(not cell for cell in current_row_cells):
+                current_row_cells = []
+                return
+            max_columns = max(max_columns, len(current_row_cells))
+            rows.append(current_row_cells)
+            current_row_cells = []
+
+        for node in environment.children:
+            if isinstance(node, Command):
+                if node.name in {"toprule", "midrule", "bottomrule"}:
+                    continue
+                if node.name in {"endhead", "endfirsthead"}:
+                    flush_row()
+                    header_row_count = len(rows)
+                    continue
+                if node.name in {"endfoot", "endlastfoot"}:
+                    flush_row()
+                    continue
+                if node.name == "tabularnewline":
+                    flush_row()
+                    continue
+                if node.name == "&":
+                    flush_cell()
+                    continue
+                if node.name == "caption":
+                    caption = self._argument(node, 0, kind="required")
+                    continue
+                if node.name == "label":
+                    label = self._argument(node, 0, kind="required")
+                    continue
+            if isinstance(node, Text):
+                content = node.content
+                if "&" in content:
+                    parts = content.split("&")
+                    for index, part in enumerate(parts):
+                        if part:
+                            current_cell_nodes.append(Text(part))
+                        if index < len(parts) - 1:
+                            flush_cell()
+                    continue
+            current_cell_nodes.append(node)
+        flush_row()
+
+        if not rows:
+            return ""
+
+        column_count = max_columns if max_columns else max(len(row) for row in rows)
+        for row in rows:
+            if len(row) < column_count:
+                row.extend([""] * (column_count - len(row)))
+
+        attributes: list[str] = []
+        if column_count:
+            cols_attr = ",".join(["1"] * column_count)
+            attributes.append(f'cols="{cols_attr}"')
+        if header_row_count > 0:
+            attributes.append('options="header"')
+
+        lines: list[str] = []
+        if label:
+            lines.append(f"[[{label}]]")
+        if caption:
+            lines.append(f".{self._normalize_caption(caption)}")
+        if attributes:
+            lines.append(f"[{','.join(attributes)}]")
+        lines.append("|===")
+
+        for index, row in enumerate(rows):
+            is_header = header_row_count > 0 and index < header_row_count
+            marker = "h|" if is_header else "|"
+            for cell in row:
+                text = cell if cell else ""
+                if text:
+                    text = self._escape_table_cell_code_pipes(text)
+                lines.append(f"{marker} {text}" if text else f"{marker} ")
+
+        lines.append("|===")
+        lines.append("")
+        return "\n".join(lines)
 
     def _render_argument(self, command: Command, argument: Argument) -> str:
         return self._render_nodes(argument.children, inline=True)
