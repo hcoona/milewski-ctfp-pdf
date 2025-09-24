@@ -156,7 +156,9 @@ class AsciiDocRenderer:
             if command.arguments:
                 path_text = self._render_nodes(command.arguments[-1].children, inline=True).strip()
                 if path_text:
-                    return f"image::{path_text}[]"
+                    base_dir = self._current_document.path.parent if self._current_document else Path()
+                    resolved_image = self._resolve_resource_path(base_dir, path_text)
+                    return f"image::{resolved_image}[]"
             return ""
         if name == "tightlist":
             return ""
@@ -376,7 +378,7 @@ class AsciiDocRenderer:
             absolute_path = base_dir / relative_path
             if not absolute_path.exists():
                 continue
-            include_path = relative_path.as_posix()
+            include_path = self._resolve_resource_path(base_dir, relative_path)
             block_lines = [
                 f"[source,{language}]",
                 "----",
@@ -387,6 +389,15 @@ class AsciiDocRenderer:
         if not blocks:
             return None
         return "\n\n".join(blocks) + "\n"
+
+    def _resolve_resource_path(self, base_dir: Path, raw_path: str | Path) -> str:
+        candidate = Path(raw_path)
+        if not candidate.is_absolute():
+            candidate = base_dir / candidate
+        try:
+            return str(candidate.resolve(strict=False))
+        except (OSError, RuntimeError):
+            return str(candidate)
 
     def _render_figure(self, environment: Environment) -> str:
         image_path: str | None = None
@@ -404,7 +415,9 @@ class AsciiDocRenderer:
         if normalized_caption:
             lines.append(f".{normalized_caption}")
         if image_path:
-            lines.append(f"image::{image_path}[]")
+            base_dir = self._current_document.path.parent if self._current_document else Path()
+            resolved_image = self._resolve_resource_path(base_dir, image_path)
+            lines.append(f"image::{resolved_image}[]")
         else:
             lines.append(self._render_nodes(environment.children).strip())
         return "\n".join(lines) + "\n\n"
