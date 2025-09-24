@@ -70,7 +70,7 @@ class AsciiDocRenderer:
     def _escape_text(self, text: str) -> str:
         text = self._DOUBLE_QUOTE_PATTERN.sub(lambda match: f'"{match.group(1)}"', text)
         text = text.replace("``", '"').replace("''", '"')
-        return text.replace("C++", "C\\+\\+")
+        return text.replace("C++", "{cpp}")
 
     def _render_node(self, node: Node, *, inline: bool) -> str:
         if isinstance(node, Text):
