@@ -63,9 +63,12 @@ class AsciiDocRenderer:
             chunks.append(self._render_node(node, inline=inline))
         return "".join(chunks)
 
+    def _escape_text(self, text: str) -> str:
+        return text.replace("C++", "C\\+\\+")
+
     def _render_node(self, node: Node, *, inline: bool) -> str:
         if isinstance(node, Text):
-            return node.content
+            return self._escape_text(node.content)
         if isinstance(node, Comment):
             return ""
         if isinstance(node, Group):
