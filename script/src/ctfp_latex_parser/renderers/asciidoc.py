@@ -186,6 +186,8 @@ class AsciiDocRenderer:
             return f"{lead} {rest}"
         if name == "centering":
             return ""
+        if name == "hfill":
+            return ""
         if name == "noindent":
             return ""
         if name == "includegraphics":
@@ -493,27 +495,95 @@ class AsciiDocRenderer:
         except (OSError, RuntimeError):
             return str(candidate)
 
-    def _render_figure(self, environment: Environment) -> str:
-        image_path: str | None = None
+    def _render_minipage_cell(self, environment: Environment) -> str:
         caption: str | None = None
+        image_paths: list[str] = []
+        extra_nodes: list[Node] = []
+        base_dir = self._current_document.path.parent if self._current_document else Path()
+
         for node in environment.children:
             if isinstance(node, Command):
                 if node.name == "includegraphics":
                     if node.arguments:
                         target = node.arguments[-1]
-                        image_path = self._render_nodes(target.children, inline=True).strip()
-                elif node.name == "caption":
+                        path_text = self._render_nodes(target.children, inline=True).strip()
+                        if path_text:
+                            resolved = self._resolve_resource_path(base_dir, path_text)
+                            image_paths.append(resolved)
+                    continue
+                if node.name == "caption":
                     caption = self._argument(node, 0, kind="required")
+                    continue
+                if node.name in {"centering", "hfill"}:
+                    continue
+            extra_nodes.append(node)
+
+        normalized_caption = self._normalize_caption(caption) if caption else None
+        extra_content = self._render_nodes(extra_nodes).strip()
+
+        block_lines: list[str] = []
+        if normalized_caption:
+            block_lines.append(f".{normalized_caption}")
+        for path in image_paths:
+            if normalized_caption:
+                block_lines.append(f"image::{path}[{normalized_caption}]")
+            else:
+                block_lines.append(f"image::{path}[]")
+        if extra_content:
+            block_lines.append(extra_content)
+
+        if not block_lines:
+            return ""
+        content = "\n".join(block_lines)
+        return f"a|\n{content}"
+
+    def _render_figure(self, environment: Environment) -> str:
+        caption: str | None = None
+        minipage_cells: list[str] = []
+        images: list[str] = []
+        fallback_nodes: list[Node] = []
+        for node in environment.children:
+            if isinstance(node, Environment) and node.name == "minipage":
+                cell = self._render_minipage_cell(node)
+                if cell:
+                    minipage_cells.append(cell)
+                continue
+            if isinstance(node, Command):
+                if node.name == "includegraphics":
+                    rendered_image = self._render_command(node, inline=False).strip()
+                    if rendered_image:
+                        images.append(rendered_image)
+                    continue
+                if node.name == "caption":
+                    caption = self._argument(node, 0, kind="required")
+                    continue
+            fallback_nodes.append(node)
         lines: list[str] = []
         normalized_caption = self._normalize_caption(caption) if caption else None
         if normalized_caption:
             lines.append(f".{normalized_caption}")
-        if image_path:
-            base_dir = self._current_document.path.parent if self._current_document else Path()
-            resolved_image = self._resolve_resource_path(base_dir, image_path)
-            lines.append(f"image::{resolved_image}[]")
+        extra = self._render_nodes(fallback_nodes).strip()
+        if minipage_cells:
+            cols_spec = ",".join(["^.^"] * len(minipage_cells)) or "^.^"
+            lines.append(f"[cols=\"{cols_spec}\",frame=\"none\",grid=\"none\"]")
+            lines.append("|===")
+            for cell in minipage_cells:
+                lines.append(cell)
+            lines.append("|===")
+            if extra:
+                lines.append(extra)
+            return "\n".join(lines) + "\n\n"
+        if images:
+            lines.extend(images)
+            if extra:
+                lines.append(extra)
+            return "\n".join(lines) + "\n\n"
+        if extra:
+            lines.append(extra)
         else:
-            lines.append(self._render_nodes(environment.children).strip())
+            fallback = self._render_nodes(environment.children).strip()
+            if fallback:
+                lines.append(fallback)
         return "\n".join(lines) + "\n\n"
 
     def _render_argument(self, command: Command, argument: Argument) -> str:
