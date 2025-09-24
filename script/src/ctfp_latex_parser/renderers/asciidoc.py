@@ -34,16 +34,17 @@ class AsciiDocRenderer:
         ("scala", "scala"),
     )
     _MATH_SIMPLE_MACROS: dict[str, str] = {
-        "Set": r"\mathbf{Set}",
-        "Rel": r"\mathbf{Rel}",
-        "Cat": r"\mathbf{Cat}",
+        "Set": r"\cat{Set}",
+        "Rel": r"\cat{Rel}",
+        "Cat": r"\cat{Cat}",
         "id": r"\mathbf{id}",
         "Ran": r"\mathbf{Ran}",
         "Lan": r"\mathbf{Lan}",
         "Hask": r"\mathbf{Hask}",
+        "Fop": r"\cat{F}^{\mathit{op}}",
     }
     _MATH_SIMPLE_MACRO_PATTERNS: dict[str, re.Pattern[str]] = {
-        name: re.compile(rf"\\{name}(?=\\b|[^a-zA-Z])")
+        name: re.compile(rf"\\{name}(?=\b|[^a-zA-Z])")
         for name in _MATH_SIMPLE_MACROS
     }
     _RE_CAT = re.compile(r"\\cat\s*\{([^{}]*)\}")
@@ -268,13 +269,14 @@ class AsciiDocRenderer:
         def replace_fop(_: re.Match[str]) -> str:
             return r"\mathbf{F}^{\mathit{op}}"
 
-        expanded = self._RE_CAT.sub(replace_cat, content)
-        expanded = self._RE_IDARROW.sub(replace_idarrow, expanded)
-        expanded = self._RE_LIM.sub(replace_lim, expanded)
-        expanded = self._RE_FOP.sub(replace_fop, expanded)
+        expanded = content
         for name, replacement in self._MATH_SIMPLE_MACROS.items():
             pattern = self._MATH_SIMPLE_MACRO_PATTERNS[name]
             expanded = pattern.sub(lambda _: replacement, expanded)
+        expanded = self._RE_CAT.sub(replace_cat, expanded)
+        expanded = self._RE_IDARROW.sub(replace_idarrow, expanded)
+        expanded = self._RE_LIM.sub(replace_lim, expanded)
+        expanded = self._RE_FOP.sub(replace_fop, expanded)
         expanded = expanded.replace(r"\symbf", r"\mathbf")
         expanded = expanded.replace(r"\Colon", "∷")
         return expanded
