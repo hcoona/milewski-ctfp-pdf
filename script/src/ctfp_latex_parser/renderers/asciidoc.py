@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -24,6 +26,7 @@ class _ListItem:
 
 class AsciiDocRenderer:
     _BLOCK_DELIMITERS = {"----", "++++", "....", "____", "****"}
+    _DOUBLE_QUOTE_PATTERN = re.compile(r"``([^`]*?)''")
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
         ("ocaml", "ml"),
@@ -64,6 +67,8 @@ class AsciiDocRenderer:
         return "".join(chunks)
 
     def _escape_text(self, text: str) -> str:
+        text = self._DOUBLE_QUOTE_PATTERN.sub(lambda match: f'"{match.group(1)}"', text)
+        text = text.replace("``", '"').replace("''", '"')
         return text.replace("C++", "C\\+\\+")
 
     def _render_node(self, node: Node, *, inline: bool) -> str:
