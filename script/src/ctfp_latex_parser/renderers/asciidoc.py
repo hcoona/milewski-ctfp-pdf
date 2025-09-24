@@ -116,6 +116,8 @@ class AsciiDocRenderer:
             return "\n\n"
         if name == "Colon":
             return "∷"
+        if name == "&":
+            return "&"
         if name in {"_", "textunderscore"}:
             return "_"
         if name in {"textbf", "newterm"}:
