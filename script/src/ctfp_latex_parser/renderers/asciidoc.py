@@ -30,6 +30,26 @@ class AsciiDocRenderer:
     _DOUBLE_QUOTE_PATTERN = re.compile(r"``([^`]*?)''")
     _CODE_SPAN_PATTERN = re.compile(r"(``?)([^`]*?)(\1)")
     _LATEXMATH_SPAN_PATTERN = re.compile(r"(latexmath:\[)(.*?)(?<!\\)(\])", re.DOTALL)
+    _INLINE_BRACKET_ESCAPING_COMMANDS: frozenset[str] = frozenset(
+        {
+            "left",
+            "right",
+            "middle",
+            "big",
+            "Big",
+            "bigg",
+            "Bigg",
+            "bigl",
+            "Bigl",
+            "bigr",
+            "Bigr",
+            "biggl",
+            "Biggl",
+            "biggr",
+            "Biggr",
+        }
+    )
+    _INLINE_LBRACK_LETTER_PATTERN = re.compile(r"\\lbrack(?=[A-Za-z])")
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
         ("ocaml", "ml"),
@@ -304,9 +324,13 @@ class AsciiDocRenderer:
         return "".join(parts)
 
     def _render_math(self, math: Math) -> str:
-        content = self._expand_math_macros(math.content).strip()
+        raw_content = math.content
         if math.kind == "inline":
-            return f"latexmath:[{content}]"
+            normalized = self._escape_inline_math_square_brackets(raw_content)
+            expanded = self._expand_math_macros(normalized).strip()
+            escaped = self._escape_inline_math_square_brackets(expanded)
+            return f"latexmath:[{escaped}]"
+        content = self._expand_math_macros(raw_content).strip()
         return f"[latexmath]\n++++\n{content}\n++++\n\n"
 
     def _expand_math_macros(self, content: str) -> str:
@@ -340,6 +364,76 @@ class AsciiDocRenderer:
         expanded = expanded.replace(r"\symbf", r"\mathbf")
         expanded = expanded.replace(r"\Colon", "∷")
         return expanded
+
+    def _escape_inline_math_square_brackets(self, content: str) -> str:
+        if not content:
+            return content
+
+        result: list[str] = []
+        index = 0
+        optional_argument_depth = 0
+        last_command_name: str | None = None
+        command_just_parsed = False
+
+        while index < len(content):
+            char = content[index]
+
+            if char == "\\":
+                result.append(char)
+                index += 1
+                if index < len(content):
+                    if content[index].isalpha():
+                        start = index
+                        while index < len(content) and content[index].isalpha():
+                            result.append(content[index])
+                            index += 1
+                        last_command_name = content[start:index]
+                    else:
+                        result.append(content[index])
+                        index += 1
+                        last_command_name = None
+                command_just_parsed = True
+                continue
+
+            if char == "[":
+                if optional_argument_depth == 0 and (
+                    not command_just_parsed
+                    or (last_command_name in self._INLINE_BRACKET_ESCAPING_COMMANDS)
+                ):
+                    result.append(r"\lbrack")
+                    next_index = index + 1
+                    if next_index < len(content) and content[next_index].isalpha():
+                        result.append(" ")
+                else:
+                    result.append(char)
+                    optional_argument_depth += 1
+                command_just_parsed = False
+                last_command_name = None
+                index += 1
+                continue
+
+            if char == "]":
+                if optional_argument_depth > 0:
+                    optional_argument_depth -= 1
+                    result.append(char)
+                else:
+                    result.append(r"\rbrack")
+                command_just_parsed = False
+                last_command_name = None
+                index += 1
+                continue
+
+            result.append(char)
+            if not char.isspace():
+                command_just_parsed = False
+                last_command_name = None
+            index += 1
+
+        escaped = "".join(result)
+        escaped = escaped.replace("{\\lbrack}", "\\lbrack")
+        escaped = escaped.replace("{\\rbrack}", "\\rbrack")
+        escaped = self._INLINE_LBRACK_LETTER_PATTERN.sub("\\\\lbrack ", escaped)
+        return escaped
 
     def _render_list(self, children: Sequence[Node], *, numbered: bool) -> str:
         self._list_depth += 1
