@@ -62,6 +62,7 @@ class AsciiDocRenderer:
     )
     _ENSUREMATH_INLINE_REPLACEMENTS: dict[str, str] = {
         r"\cong": "≅",
+        r"\Colon": "∷",
     }
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
@@ -197,8 +198,6 @@ class AsciiDocRenderer:
             return "#"
         if name == "par":
             return "\n\n"
-        if name == "Colon":
-            return "∷"
         if name == "&":
             return "&"
         if name in {"_", "textunderscore"}:
