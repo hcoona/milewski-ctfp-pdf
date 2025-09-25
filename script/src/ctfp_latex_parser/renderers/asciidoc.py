@@ -479,6 +479,8 @@ class AsciiDocRenderer:
         return "".join(parts)
 
     def _render_command_as_latex(self, command: Command) -> str:
+        if command.name in {"", "\n"}:
+            return "\\\\\n"
         parts: list[str] = ["\\", command.name]
         if command.star:
             parts.append("*")

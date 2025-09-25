@@ -85,6 +85,27 @@ class AsciiDocInlineMathTests(unittest.TestCase):
             rendered,
         )
 
+    def test_gather_environment_preserves_structure(self) -> None:
+        source = (
+            "\\begin{gather*}\n"
+            "  R \\circ L \\to I_{\\cat{D}} \\quad\\quad\\text{not necessarily} \\\n"
+            "  I_{\\cat{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
+            "\\end{gather*}\n"
+        )
+        environment = self._first_environment(parse_text(source))
+        rendered = self.renderer._render_environment(environment)
+        self.assertEqual(
+            (
+                "[latexmath]\n++++\n"
+                "\\begin{gather*}\n"
+                "R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\n"
+                "  I_{\\mathbf{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
+                "\\end{gather*}\n\n"
+                "++++\n\n"
+            ),
+            rendered,
+        )
+
     @staticmethod
     def _first_environment(nodes: list) -> Environment:
         for node in nodes:
