@@ -60,6 +60,9 @@ class AsciiDocRenderer:
             "gather*",
         }
     )
+    _ENSUREMATH_INLINE_REPLACEMENTS: dict[str, str] = {
+        r"\cong": "≅",
+    }
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
         ("ocaml", "ml"),
@@ -248,6 +251,10 @@ class AsciiDocRenderer:
             return f"xref:{target}[]"
         if name == "ensuremath":
             expr = self._argument(command, 0, kind="required")
+            if inline:
+                replacement = self._ENSUREMATH_INLINE_REPLACEMENTS.get(expr)
+                if replacement is not None:
+                    return replacement
             return f"latexmath:[{self._expand_math_macros(expr)}]"
         if name == "ldots":
             return "..."

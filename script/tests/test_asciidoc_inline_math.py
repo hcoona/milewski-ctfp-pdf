@@ -45,9 +45,9 @@ class AsciiDocInlineMathTests(unittest.TestCase):
             (
                 "[latexmath]\n++++\n"
                 "\\begin{align*}\n"
-                "  F & = m \\frac{dv}{dt} \\\\n"
+                "F & = m \\frac{dv}{dt} \\\\n"
                 "  v & = \\frac{dx}{dt}\n"
-                "\\end{align*}\n"
+                "\\end{align*}\n\n"
                 "++++\n\n"
             ),
             rendered,
@@ -61,9 +61,26 @@ class AsciiDocInlineMathTests(unittest.TestCase):
             (
                 "[latexmath]\n++++\n"
                 "\\begin{align}\n"
-                "\\mathbf{C} &\\to \\mathbf{D}\n"
-                "\\end{align}\n"
+                "\\mathbf{C} &\\to \\mathbf{D} \n"
+                "\\end{align}\n\n"
                 "++++\n\n"
+            ),
+            rendered,
+        )
+
+    def test_snipv_ensuremath_cong(self) -> None:
+        source = (
+            "\\begin{snipv}\n"
+            "forall x. (a -> x) -> (b -> x) \\ensuremath{\\cong} b -> a\n"
+            "\\end{snipv}\n"
+        )
+        environment = self._first_environment(parse_text(source))
+        rendered = self.renderer._render_environment(environment)
+        self.assertEqual(
+            (
+                "[source]\n----\n"
+                "forall x. (a -> x) -> (b -> x) ≅ b -> a\n"
+                "----\n\n"
             ),
             rendered,
         )
