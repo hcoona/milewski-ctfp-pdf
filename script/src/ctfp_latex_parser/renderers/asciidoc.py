@@ -50,6 +50,16 @@ class AsciiDocRenderer:
         }
     )
     _INLINE_LBRACK_LETTER_PATTERN = re.compile(r"\\lbrack(?=[A-Za-z])")
+    _MATH_BLOCK_ENVIRONMENTS: frozenset[str] = frozenset(
+        {
+            "align",
+            "align*",
+            "equation",
+            "equation*",
+            "gather",
+            "gather*",
+        }
+    )
     _SNIPPET_LANGUAGES: tuple[tuple[str, str], ...] = (
         ("haskell", "hs"),
         ("ocaml", "ml"),
@@ -290,16 +300,8 @@ class AsciiDocRenderer:
             return self._render_figure(environment)
         if name == "longtable":
             return self._render_longtable(environment)
-        if name in {"align", "align*", "equation", "equation*", "gather", "gather*"}:
-            self._math_block_depth += 1
-            try:
-                body = self._render_nodes(environment.children)
-            finally:
-                self._math_block_depth -= 1
-            body = re.sub(r"\n\s*\n", "\n", body)
-            lines = [part.strip() for part in body.splitlines()]
-            body = "\n".join(lines).strip()
-            return f"[latexmath]\n++++\n{body}\n++++\n\n"
+        if name in self._MATH_BLOCK_ENVIRONMENTS:
+            return self._render_math_environment(environment)
         return self._render_nodes(environment.children)
 
     def _render_code_block(self, nodes: Sequence[Node]) -> str:
@@ -434,6 +436,94 @@ class AsciiDocRenderer:
         escaped = escaped.replace("{\\rbrack}", "\\rbrack")
         escaped = self._INLINE_LBRACK_LETTER_PATTERN.sub("\\\\lbrack ", escaped)
         return escaped
+
+    def _render_math_environment(self, environment: Environment) -> str:
+        self._math_block_depth += 1
+        try:
+            latex = self._render_environment_as_latex(environment)
+        finally:
+            self._math_block_depth -= 1
+        expanded = self._expand_math_macros(latex)
+        if not expanded.endswith("\n"):
+            expanded += "\n"
+        return f"[latexmath]\n++++\n{expanded}\n++++\n\n"
+
+    def _render_environment_as_latex(self, environment: Environment) -> str:
+        parts: list[str] = ["\\begin{", environment.name, "}"]
+        for argument in environment.arguments:
+            if argument.kind == "optional":
+                parts.append("[")
+                parts.append(self._render_nodes_as_latex(argument.children))
+                parts.append("]")
+            else:
+                parts.append("{")
+                parts.append(self._render_nodes_as_latex(argument.children))
+                parts.append("}")
+        children_latex = self._render_nodes_as_latex(environment.children)
+        if children_latex:
+            if not children_latex.startswith("\n"):
+                children_latex = "\n" + children_latex
+            if not children_latex.endswith("\n"):
+                children_latex += "\n"
+            parts.append(children_latex)
+        parts.append("\\end{")
+        parts.append(environment.name)
+        parts.append("}")
+        return "".join(parts)
+
+    def _render_command_as_latex(self, command: Command) -> str:
+        parts: list[str] = ["\\", command.name]
+        if command.star:
+            parts.append("*")
+        for argument in command.arguments:
+            if argument.kind == "optional":
+                parts.append("[")
+                parts.append(self._render_nodes_as_latex(argument.children))
+                parts.append("]")
+            else:
+                parts.append("{")
+                parts.append(self._render_nodes_as_latex(argument.children))
+                parts.append("}")
+        return "".join(parts)
+
+    def _render_math_as_latex(self, math: Math) -> str:
+        delimiter = math.delimiter
+        if delimiter == "$$" or delimiter == "$":
+            return f"{delimiter}{math.content}{delimiter}"
+        if delimiter == "\\[...\\]":
+            return f"\\[{math.content}\\]"
+        if delimiter == "\\(...\\)":
+            return f"\\({math.content}\\)"
+        return math.content
+
+    def _render_nodes_as_latex(self, nodes: Sequence[Node]) -> str:
+        parts: list[str] = []
+        for node in nodes:
+            if isinstance(node, Text):
+                parts.append(node.content)
+                continue
+            if isinstance(node, Comment):
+                parts.append(f"%{node.content}")
+                continue
+            if isinstance(node, Group):
+                if node.kind == "brace":
+                    parts.append("{")
+                    parts.append(self._render_nodes_as_latex(node.children))
+                    parts.append("}")
+                else:
+                    parts.append("[")
+                    parts.append(self._render_nodes_as_latex(node.children))
+                    parts.append("]")
+                continue
+            if isinstance(node, Command):
+                parts.append(self._render_command_as_latex(node))
+                continue
+            if isinstance(node, Environment):
+                parts.append(self._render_environment_as_latex(node))
+                continue
+            if isinstance(node, Math):
+                parts.append(self._render_math_as_latex(node))
+        return "".join(parts)
 
     def _render_list(self, children: Sequence[Node], *, numbered: bool) -> str:
         self._list_depth += 1
