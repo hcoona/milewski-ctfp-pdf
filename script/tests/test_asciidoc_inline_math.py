@@ -88,7 +88,7 @@ class AsciiDocInlineMathTests(unittest.TestCase):
     def test_gather_environment_preserves_structure(self) -> None:
         source = (
             "\\begin{gather*}\n"
-            "  R \\circ L \\to I_{\\cat{D}} \\quad\\quad\\text{not necessarily} \\\n"
+            "  R \\circ L \\to I_{\\cat{D}} \\quad\\quad\\text{not necessarily} \\\\\n"
             "  I_{\\cat{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
             "\\end{gather*}\n"
         )
@@ -98,7 +98,7 @@ class AsciiDocInlineMathTests(unittest.TestCase):
             (
                 "[latexmath]\n++++\n"
                 "\\begin{gather*}\n"
-                "R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\n"
+                "R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\\\n"
                 "  I_{\\mathbf{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
                 "\\end{gather*}\n\n"
                 "++++\n\n"
