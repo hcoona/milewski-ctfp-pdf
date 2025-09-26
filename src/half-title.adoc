@@ -1,37 +1,17 @@
-:opt-version: dev
-
-[.text-right]
-[%hardbreaks]
 *Category Theory for Programmers*
-ifdef::opt-custom-language[]
-+
-[.small]
-*{opt-display-language-name} Edition*
-_{opt-display-language-name} and Haskell code snippets included_
-endif::opt-custom-language[]
-+
-[.lead]
-_By_ *Bartosz Milewski*
-+
-[.small]
-_compiled and edited by_ *Igal Tabachnik*
 
-<<<
-
-[.text-center]
-[%hardbreaks]
-*Category Theory for Programmers*
 Bartosz Milewski
 
-Version {opt-version}
+Version {revnumber}
+
 {docdate}
 
-image:fig/icons/cc.pdf[width=18] image:fig/icons/by.pdf[width=18] image:fig/icons/sa.pdf[width=18]
+image:fig/icons/cc.svg[width=18] image:fig/icons/by.svg[width=18] image:fig/icons/sa.svg[width=18]
 
 This work is licensed under the link:http://creativecommons.org/licenses/by-sa/4.0/[Creative Commons Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0)].
 
 Converted from a series of blog posts by link:https://bartoszmilewski.com/2014/10/28/category-theory-for-programmers-the-preface/[Bartosz Milewski].
-PDF and book compiled by link:https://hmemcpy.com[Igal Tabachnik].
+PDF and book compiled by link:https://hmemcpy.com[Igal Tabachnik]. HTML and EPUB compiled by link:https://hcoona.github.io[Shuai Zhang].
 
 The AsciiDoc source is available on GitHub:
 link:https://github.com/hmemcpy/milewski-ctfp-pdf[https://github.com/hmemcpy/milewski-ctfp-pdf].

@@ -4,16 +4,9 @@ Bartosz Milewski
 :toc: macro
 :index:
 :lang: en
-:subject: Category theory, computer science, programming, abstraction, composition
 :keywords: category theory, computer science, programming, abstraction, composition
-:description: Category Theory for Programmers by Bartosz Milewski, compiled and edited by Igal Tabachnik.
-:editor: Igal Tabachnik
 :revnumber: dev
-:revremark: Converted from the LaTeX edition maintained in the milewski-ctfp-pdf repository.
-:opt-version: dev
-
-
-// Automatically converted from `ctfp.tex`
+:version-label!:
 
 include::half-title.adoc[]
 
@@ -160,6 +153,7 @@ include::../out/asciidoc/3.15.adoc[leveloffset=+1]
 
 // Back matter
 :sectnums!:
+[appendix]
 = Appendices
 
 include::index.adoc[]
@@ -168,6 +162,7 @@ include::index.adoc[]
 
 include::acknowledgments.adoc[leveloffset=+1]
 
+[colophon]
 == Colophon
 
 include::colophon.adoc[leveloffset=+1]
