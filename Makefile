@@ -43,7 +43,7 @@ ctfp-print-scala:
 lint:
 	$(foreach file, $(call rwildcard,$(shell dirname "$(INPUT)"),*.tex), latexindent -l -w $(file);)
 
-.PHONY: asciidoc asciidoc-clean $(ASCIIDOC_TARGET_ALIASES)
+.PHONY: asciidoc asciidoc-clean $(ASCIIDOC_TARGET_ALIASES) ctfp-html
 
 asciidoc: $(ASCIIDOC_TARGETS)
 
@@ -57,3 +57,5 @@ $(ASCIIDOC_OUTPUT_DIR)/%.adoc: $$(call rwildcard,$(ASCIIDOC_ROOT)/%/,*)
 	@mkdir -p $(dir $@)
 	$(CTFP_PARSE) --root $(ASCIIDOC_ROOT)/$*/ --expand-snippet-language $(ASCIIDOC_SNIPPET_LANGUAGE) --format $(ASCIIDOC_FORMAT) --output $@
 
+ctfp-html: asciidoc
+	$(UV) run asciidoctor -r asciidoctor-diagram -a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex -a data-uri -a mathjax -a 'stem=latexmath' -a 'source-highlighter=pygments' -a 'pygments-style=github' -a nocache -o out/html/ctfp.html src/ctfp.adoc
