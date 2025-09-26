@@ -5,7 +5,7 @@ import textwrap
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
+from typing import Iterable, Sequence
 
 from ..nodes import (
     Argument,
@@ -89,6 +89,10 @@ class AsciiDocRenderer:
     _RE_IDARROW = re.compile(r"\\idarrow(?:\[(.*?)\])?")
     _RE_LIM = re.compile(r"\\Lim(?:\[(.*?)\])?")
     _RE_FOP = re.compile(r"\\Fop\b")
+    _FIGURE_ALLOWED_TIKZ_COMMANDS: frozenset[str] = frozenset(
+        {"centering", "label", "hfill", "hspace", "vspace"}
+    )
+    _FIGURE_ALLOWED_TIKZ_ENVIRONMENTS: frozenset[str] = frozenset({"center"})
 
     def __init__(self, *, expand_snippet_languages: Sequence[str] | None = None) -> None:
         self._current_document: Document | None = None
@@ -336,6 +340,9 @@ class AsciiDocRenderer:
         table_rendered = self._render_tikz_subfigure_table(environment, sorted_libraries)
         if table_rendered is not None:
             return table_rendered
+        single_block = self._extract_single_tikz_block(environment, sorted_libraries)
+        if single_block is not None:
+            return single_block + "\n"
         latex_source = self._render_environment_to_latex(environment).rstrip("\n") + "\n"
         block = self._format_tikz_block(latex_source, sorted_libraries)
         return block + "\n"
@@ -354,8 +361,40 @@ class AsciiDocRenderer:
         for library in libraries:
             lines.append(f"\\usetikzlibrary{{{library}}}")
         lines.append("~~~~")
-        lines.append(latex_source.rstrip("\n"))
+        lines.append(self._normalize_tikz_latex(latex_source))
         lines.append("----")
+        return "\n".join(lines)
+
+    def _normalize_tikz_latex(self, latex_source: str) -> str:
+        stripped = latex_source.rstrip("\n")
+        if not stripped:
+            return stripped
+        lines = stripped.split("\n")
+        if len(lines) == 1:
+            return lines[0].lstrip(" \t")
+        closing_index = len(lines) - 1
+        lines[closing_index] = lines[closing_index].lstrip(" \t")
+        body_indices = range(1, closing_index)
+        indent_levels: list[int] = []
+        for index in body_indices:
+            line = lines[index]
+            if not line.strip():
+                continue
+            indent = len(line) - len(line.lstrip(" \t"))
+            indent_levels.append(indent)
+        excess_indent = 0
+        if indent_levels:
+            minimal_indent = min(indent_levels)
+            if minimal_indent > 2:
+                excess_indent = minimal_indent - 2
+        if excess_indent > 0:
+            for index in body_indices:
+                line = lines[index]
+                if not line:
+                    continue
+                removal = min(excess_indent, len(line) - len(line.lstrip(" \t")))
+                if removal > 0:
+                    lines[index] = line[removal:]
         return "\n".join(lines)
 
     def _render_tikz_subfigure_table(
@@ -427,6 +466,54 @@ class AsciiDocRenderer:
                 return None
             if isinstance(node, Command):
                 return None
+            return None
+        if tikz_env is None:
+            return None
+        latex_source = self._render_environment_to_latex(tikz_env).rstrip("\n") + "\n"
+        return self._format_tikz_block(latex_source, libraries, caption)
+
+    def _extract_single_tikz_block(
+        self,
+        environment: Environment,
+        libraries: Sequence[str],
+    ) -> str | None:
+        caption: str | None = None
+        tikz_env: Environment | None = None
+
+        def visit(nodes: Sequence[Node]) -> bool:
+            nonlocal caption, tikz_env
+            for node in nodes:
+                if isinstance(node, Comment):
+                    continue
+                if isinstance(node, Text):
+                    if node.content.strip():
+                        return False
+                    continue
+                if isinstance(node, Command):
+                    if node.name == "caption":
+                        caption = self._argument(node, 0, kind="required")
+                        continue
+                    if node.name in self._FIGURE_ALLOWED_TIKZ_COMMANDS:
+                        continue
+                    return False
+                if isinstance(node, Environment):
+                    if node.name in self._TIKZ_ENVIRONMENTS:
+                        if tikz_env is not None:
+                            return False
+                        tikz_env = node
+                        continue
+                    if node.name == "subfigure":
+                        return False
+                    if node.name in self._FIGURE_ALLOWED_TIKZ_ENVIRONMENTS:
+                        if not visit(node.children):
+                            return False
+                        continue
+                    return False
+                else:
+                    return False
+            return True
+
+        if not visit(environment.children):
             return None
         if tikz_env is None:
             return None
