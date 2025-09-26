@@ -5,7 +5,7 @@ import textwrap
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Optional, Sequence
 
 from ..nodes import (
     Argument,
@@ -60,6 +60,7 @@ class AsciiDocRenderer:
             "gather*",
         }
     )
+    _TIKZ_ENVIRONMENTS: frozenset[str] = frozenset({"tikzcd", "tikzpicture"})
     _ENSUREMATH_INLINE_REPLACEMENTS: dict[str, str] = {
         r"\cong": "≅",
         r"\Colon": "∷",
@@ -330,6 +331,207 @@ class AsciiDocRenderer:
             elif isinstance(node, Math):
                 parts.append(node.content)
         return "".join(parts)
+
+    def _render_tikz_figure(self, environment: Environment) -> str:
+        libraries: set[str] = set()
+        self._nodes_contain_tikz(environment.children, libraries=libraries)
+        sorted_libraries = sorted(libraries)
+        table_rendered = self._render_tikz_subfigure_table(environment, sorted_libraries)
+        if table_rendered is not None:
+            return table_rendered
+        latex_source = self._render_environment_to_latex(environment).rstrip("\n") + "\n"
+        block = self._format_tikz_block(latex_source, sorted_libraries)
+        return block + "\n"
+
+    def _format_tikz_block(
+        self,
+        latex_source: str,
+        libraries: Sequence[str],
+        caption: str | None = None,
+    ) -> str:
+        lines: list[str] = []
+        if caption:
+            lines.append(f".{self._normalize_caption(caption)}")
+        lines.append("[tikz,preamble=true]")
+        lines.append("----")
+        for library in libraries:
+            lines.append(f"\\usetikzlibrary{{{library}}}")
+        lines.append("~~~~")
+        lines.append(latex_source.rstrip("\n"))
+        lines.append("----")
+        return "\n".join(lines)
+
+    def _render_tikz_subfigure_table(
+        self,
+        environment: Environment,
+        libraries: Sequence[str],
+    ) -> str | None:
+        subfigure_blocks: list[str] = []
+        caption: str | None = None
+        for node in environment.children:
+            if isinstance(node, Comment):
+                continue
+            if isinstance(node, Command):
+                if node.name == "caption":
+                    caption = self._argument(node, 0, kind="required")
+                    continue
+                if node.name in {"centering", "hspace"}:
+                    continue
+            if isinstance(node, Environment) and node.name == "subfigure":
+                block = self._extract_tikz_subfigure_block(node, libraries)
+                if block is None:
+                    return None
+                subfigure_blocks.append(block)
+                continue
+            if isinstance(node, Text) and not node.content.strip():
+                continue
+            return None
+        if len(subfigure_blocks) < 2:
+            return None
+        cols_spec = ",".join(["^.^"] * len(subfigure_blocks))
+        lines: list[str] = []
+        if caption:
+            lines.append(f".{self._normalize_caption(caption)}")
+        lines.append(f'[cols="{cols_spec}",frame="none",grid="none"]')
+        lines.append("|===")
+        for block in subfigure_blocks:
+            lines.append("a|")
+            lines.append(block)
+        lines.append("|===")
+        lines.append("")
+        return "\n".join(lines)
+
+    def _extract_tikz_subfigure_block(
+        self,
+        subfigure: Environment,
+        libraries: Sequence[str],
+    ) -> str | None:
+        caption: str | None = None
+        tikz_env: Environment | None = None
+        for node in subfigure.children:
+            if isinstance(node, Comment):
+                continue
+            if isinstance(node, Text):
+                if node.content.strip():
+                    return None
+                continue
+            if isinstance(node, Command):
+                if node.name == "caption":
+                    caption = self._argument(node, 0, kind="required")
+                    continue
+                if node.name in {"centering", "label", "hfill", "hspace"}:
+                    continue
+            if isinstance(node, Environment) and node.name in self._TIKZ_ENVIRONMENTS:
+                if tikz_env is not None:
+                    return None
+                tikz_env = node
+                continue
+            if isinstance(node, Environment):
+                return None
+            if isinstance(node, Command):
+                return None
+            return None
+        if tikz_env is None:
+            return None
+        latex_source = self._render_environment_to_latex(tikz_env).rstrip("\n") + "\n"
+        return self._format_tikz_block(latex_source, libraries, caption)
+
+    def _figure_contains_tikz(self, environment: Environment) -> bool:
+        return self._nodes_contain_tikz(environment.children)
+
+    def _nodes_contain_tikz(self, nodes: Sequence[Node], *, libraries: set[str] | None = None) -> bool:
+        found = False
+        for node in nodes:
+            if isinstance(node, Environment):
+                if node.name in self._TIKZ_ENVIRONMENTS:
+                    found = True
+                    if libraries is not None and node.name == "tikzcd":
+                        libraries.add("cd")
+                if self._nodes_contain_tikz(node.children, libraries=libraries):
+                    found = True
+        return found
+
+    def _render_environment_to_latex(self, environment: Environment) -> str:
+        header_parts = [f"\\begin{{{environment.name}}}"]
+        for argument in environment.arguments:
+            header_parts.append(self._render_argument_to_latex(argument))
+        body = self._render_nodes_to_latex(environment.children)
+        closing_indent = ""
+        if body:
+            if body.startswith("\n"):
+                closing_indent = self._infer_latex_body_indent(body[1:])
+            elif body[0] in {" ", "\t"}:
+                closing_indent = self._infer_latex_body_indent(body)
+                body = "\n" + body
+            else:
+                closing_indent = self._infer_latex_body_indent(body)
+                prefix = "\n" + closing_indent if closing_indent else "\n"
+                body = prefix + body
+            body = re.sub(r"[ \t]+\n", "\n", body)
+            body = body.rstrip()
+        result = "".join(header_parts) + body
+        if not body.endswith("\n"):
+            result += "\n"
+        if closing_indent:
+            result += f"{closing_indent}\\end{{{environment.name}}}\n"
+        else:
+            result += f"\\end{{{environment.name}}}\n"
+        return result
+
+    def _infer_latex_body_indent(self, body: str) -> str:
+        for line in body.splitlines():
+            if not line:
+                continue
+            indent_chars: list[str] = []
+            for char in line:
+                if char in {" ", "\t"}:
+                    indent_chars.append(char)
+                else:
+                    break
+            if indent_chars:
+                return "".join(indent_chars)
+        return ""
+
+    def _render_nodes_to_latex(self, nodes: Sequence[Node]) -> str:
+        return "".join(self._render_node_to_latex(node) for node in nodes)
+
+    def _render_node_to_latex(self, node: Node) -> str:
+        if isinstance(node, Text):
+            return node.content
+        if isinstance(node, Comment):
+            return f"%{node.content}"
+        if isinstance(node, Group):
+            inner = self._render_nodes_to_latex(node.children)
+            if node.kind == "brace":
+                return "{" + inner + "}"
+            return "[" + inner + "]"
+        if isinstance(node, Command):
+            parts = ["\\", node.name]
+            if node.star:
+                parts.append("*")
+            for argument in node.arguments:
+                parts.append(self._render_argument_to_latex(argument))
+            return "".join(parts)
+        if isinstance(node, Environment):
+            return self._render_environment_to_latex(node)
+        if isinstance(node, Math):
+            return self._render_math_to_latex(node)
+        return ""
+
+    def _render_argument_to_latex(self, argument: Argument) -> str:
+        if argument.kind == "optional":
+            return "[" + self._render_nodes_to_latex(argument.children) + "]"
+        return "{" + self._render_nodes_to_latex(argument.children) + "}"
+
+    def _render_math_to_latex(self, math: Math) -> str:
+        delimiter = math.delimiter
+        if delimiter in {"$", "$$"}:
+            return f"{delimiter}{math.content}{delimiter}"
+        if delimiter == "\\(...\\)":
+            return f"\\({math.content}\\)"
+        if delimiter == "\\[...\\]":
+            return f"\\[{math.content}\\]"
+        return math.content
 
     def _render_math(self, math: Math) -> str:
         raw_content = math.content
@@ -792,6 +994,8 @@ class AsciiDocRenderer:
         return f"a|\n{content}"
 
     def _render_figure(self, environment: Environment) -> str:
+        if self._figure_contains_tikz(environment):
+            return self._render_tikz_figure(environment)
         caption: str | None = None
         minipage_cells: list[str] = []
         images: list[str] = []
