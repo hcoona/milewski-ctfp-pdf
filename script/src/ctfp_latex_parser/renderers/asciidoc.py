@@ -361,7 +361,8 @@ class AsciiDocRenderer:
         for library in libraries:
             lines.append(f"\\usetikzlibrary{{{library}}}")
         lines.append("~~~~")
-        lines.append(self._normalize_tikz_latex(latex_source))
+        expanded = self._expand_math_macros(latex_source)
+        lines.append(self._normalize_tikz_latex(expanded))
         lines.append("----")
         return "\n".join(lines)
 
