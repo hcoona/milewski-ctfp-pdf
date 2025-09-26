@@ -1,0 +1,3 @@
+This book is *Libre* and follows the philosophy of link:https://www.gnu.org/philosophy/free-sw.en.html[Free Software]: you can use this book as you like, the source is available, and you can redistribute this book as well as distribute your own version. That means you can print it, photocopy it, e-mail it, upload it to websites, change it, translate it, remix it, delete bits, and draw all over it.
+
+This book is Copyleft: if you change the book and distribute your own version, you must also pass these freedoms to its recipients. This book uses the Creative Commons Attribution-ShareAlike 4.0 International License (link:http://creativecommons.org/licenses/by-sa/4.0/[CC BY-SA 4.0]).

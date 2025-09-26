@@ -4,6 +4,20 @@ LATEXMK_ARGS ?= -f -file-line-error -shell-escape -logfilewarninglist -interacti
 TEXINPUTS = ""
 TEXLIVE_RUN = TEXINPUTS=$(TEXINPUTS)
 LATEXMK_COMMAND = $(TEXLIVE_RUN) latexmk $(LATEXMK_ARGS)
+UV ?= uv
+CTFP_PARSE = $(UV) run --package ctfp-latex-tools ctfp-parse
+
+ASCIIDOC_ROOT = src/content
+ASCIIDOC_OUTPUT_DIR = out/asciidoc
+ASCIIDOC_SNIPPET_LANGUAGE ?= ocaml
+ASCIIDOC_FORMAT ?= asciidoc
+ASCIIDOC_CHAPTERS = \
+	0.0 \
+	1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 1.10 \
+	2.1 2.2 2.3 2.4 2.5 2.6 \
+	3.1 3.2 3.3 3.4 3.5 3.6 3.7 3.8 3.9 3.10 3.11 3.12 3.13 3.14 3.15
+ASCIIDOC_TARGETS = $(addprefix $(ASCIIDOC_OUTPUT_DIR)/,$(addsuffix .adoc,$(ASCIIDOC_CHAPTERS)))
+ASCIIDOC_TARGET_ALIASES = $(addprefix asciidoc-,$(ASCIIDOC_CHAPTERS))
 
 # Make does not offer a recursive wildcard function, so here's one:
 rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
@@ -28,4 +42,18 @@ ctfp-print-scala:
 
 lint:
 	$(foreach file, $(call rwildcard,$(shell dirname "$(INPUT)"),*.tex), latexindent -l -w $(file);)
+
+.PHONY: asciidoc asciidoc-clean $(ASCIIDOC_TARGET_ALIASES)
+
+asciidoc: $(ASCIIDOC_TARGETS)
+
+asciidoc-clean:
+	rm -f $(ASCIIDOC_OUTPUT_DIR)/*.adoc
+
+$(foreach chapter,$(ASCIIDOC_CHAPTERS),$(eval asciidoc-$(chapter): $(ASCIIDOC_OUTPUT_DIR)/$(chapter).adoc))
+
+.SECONDEXPANSION:
+$(ASCIIDOC_OUTPUT_DIR)/%.adoc: $$(call rwildcard,$(ASCIIDOC_ROOT)/%/,*)
+	@mkdir -p $(dir $@)
+	$(CTFP_PARSE) --root $(ASCIIDOC_ROOT)/$*/ --expand-snippet-language $(ASCIIDOC_SNIPPET_LANGUAGE) --format $(ASCIIDOC_FORMAT) --output $@
 

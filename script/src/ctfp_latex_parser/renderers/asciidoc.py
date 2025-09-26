@@ -104,13 +104,10 @@ class AsciiDocRenderer:
 
     def render_document(self, document: Document) -> str:
         self._current_document = document
-        title = self._guess_title(document.path)
         body = self._render_nodes(document.children).strip()
-        parts = [f"= {title}"]
-        if body:
-            parts.append("")
-            parts.append(body)
-        return "\n".join(parts) + "\n"
+        if not body:
+            return "\n"
+        return f"{body}\n"
 
     def render_documents(self, documents: Sequence[Document]) -> str:
         rendered = [self.render_document(document).rstrip() for document in documents]
@@ -1209,11 +1206,6 @@ class AsciiDocRenderer:
             return ""
         rendered = self._render_nodes(argument.children, inline=True)
         return rendered.strip() if strip else rendered
-
-    def _guess_title(self, path: Path) -> str:
-        stem = path.stem.replace("_", " ").replace("-", " ")
-        title = " ".join(part.capitalize() for part in stem.split())
-        return title or path.stem
 
 
 def render_asciidoc_document(

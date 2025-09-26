@@ -1,0 +1,9 @@
+This book was compiled by link:https://hmemcpy.com[Igal Tabachnik], by converting the original text by Bartosz Milewski into LaTeX format after scraping the original WordPress blog posts with link:https://mercury.postlight.com/web-parser/[Mercury Web Parser] to obtain clean HTML, adjusting the result with link:https://www.crummy.com/software/BeautifulSoup/[Beautiful Soup], and finally converting it to LaTeX using link:https://pandoc.org/[Pandoc].
+
+The typefaces are Linux Libertine for body text and Linux Biolinum for headings, both by Philipp H. Poll. Typewriter face is Inconsolata created by Raph Levien and supplemented by Dimosthenis Kaponis and Takashi Tanigawa in the form of Inconsolata LGC. The cover page typeface is Alegreya, designed by Juan Pablo del Peral.
+
+Original book layout design and typography are by Andres Raba. Syntax highlighting uses the "GitHub" style for Pygments by link:https://github.com/hugomaiavieira/pygments-style-github[Hugo Maia Vieira].
+
+ifdef::opt-custom-language[]
+include::content/{opt-custom-language}/colophon.adoc[leveloffset=+1]
+endif::opt-custom-language[]

@@ -1,0 +1,8 @@
+== Index
+
+[quote, Donald E. Knuth, _Fundamental Algorithms_ (The Art of Computer Programming, Volume 1)]
+____
+Any inaccuracies in this index may be explained by the fact that it has been prepared with the help of a computer.
+____
+
+[index]

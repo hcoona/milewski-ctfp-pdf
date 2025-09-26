@@ -1,0 +1,5 @@
+ifdef::opt-custom-language[]
+== A note from the editor
+
+include::content/{opt-custom-language}/editor-note.adoc[leveloffset=+1]
+endif::opt-custom-language[]
