@@ -43,11 +43,12 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         rendered = self.renderer._render_environment(environment)
         self.assertEqual(
             (
-                "[latexmath]\n++++\n"
+                "[latexmath]\n"
+                "++++\n"
                 "\\begin{align*}\n"
-                "F & = m \\frac{dv}{dt} \\\\n"
+                "  F & = m \\frac{dv}{dt} \\\\n"
                 "  v & = \\frac{dx}{dt}\n"
-                "\\end{align*}\n\n"
+                "\\end{align*}\n"
                 "++++\n\n"
             ),
             rendered,
@@ -59,10 +60,9 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         rendered = self.renderer._render_environment(environment)
         self.assertEqual(
             (
-                "[latexmath]\n++++\n"
-                "\\begin{align}\n"
-                "\\mathbf{C} &\\to \\mathbf{D} \n"
-                "\\end{align}\n\n"
+                "[latexmath]\n"
+                "++++\n"
+                "\\begin{align} \\mathbf{C} &\\to \\mathbf{D} \\end{align}\n"
                 "++++\n\n"
             ),
             rendered,
@@ -78,7 +78,8 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         rendered = self.renderer._render_environment(environment)
         self.assertEqual(
             (
-                "[source]\n----\n"
+                "[source]\n"
+                "----\n"
                 "forall x. (a -> x) -> (b -> x) ≅ b -> a\n"
                 "----\n\n"
             ),
@@ -96,11 +97,12 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         rendered = self.renderer._render_environment(environment)
         self.assertEqual(
             (
-                "[latexmath]\n++++\n"
+                "[latexmath]\n"
+                "++++\n"
                 "\\begin{gather*}\n"
-                "R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\\\n"
+                "  R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\\\n"
                 "  I_{\\mathbf{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
-                "\\end{gather*}\n\n"
+                "\\end{gather*}\n"
                 "++++\n\n"
             ),
             rendered,

@@ -736,9 +736,7 @@ class AsciiDocRenderer:
             latex = self._render_environment_as_latex(environment)
         finally:
             self._math_block_depth -= 1
-        expanded = self._expand_math_macros(latex)
-        if not expanded.endswith("\n"):
-            expanded += "\n"
+        expanded = self._expand_math_macros(latex).rstrip("\n")
         return f"[latexmath]\n++++\n{expanded}\n++++\n\n"
 
     def _render_environment_as_latex(self, environment: Environment) -> str:
@@ -754,11 +752,17 @@ class AsciiDocRenderer:
                 parts.append("}")
         children_latex = self._render_nodes_as_latex(environment.children)
         if children_latex:
-            if not children_latex.startswith("\n"):
-                children_latex = "\n" + children_latex
-            if not children_latex.endswith("\n"):
-                children_latex += "\n"
-            parts.append(children_latex)
+            multiline_body = "\n" in children_latex
+            body = children_latex
+            if not multiline_body and body and not body[0].isspace():
+                first_child = environment.children[0] if environment.children else None
+                if isinstance(first_child, Command):
+                    body = " " + body
+            if multiline_body and not body.startswith("\n"):
+                body = "\n" + body
+            if multiline_body and not body.endswith("\n"):
+                body += "\n"
+            parts.append(body)
         parts.append("\\end{")
         parts.append(environment.name)
         parts.append("}")
@@ -766,7 +770,7 @@ class AsciiDocRenderer:
 
     def _render_command_as_latex(self, command: Command) -> str:
         if command.name in {"", "\n"}:
-            return "\\\\\n"
+            return "\\\n"
         parts: list[str] = ["\\", command.name]
         if command.star:
             parts.append("*")

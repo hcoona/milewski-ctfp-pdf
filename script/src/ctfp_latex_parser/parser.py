@@ -164,21 +164,25 @@ class LatexParser:
         name = self._read_until("}")
         self._expect_char("}")
         self.position += 1
-        self._consume_whitespace()
+        leading_whitespace = self._read_whitespace()
+        trailing_whitespace = leading_whitespace
         arguments: list[Argument] = []
         while True:
             current = self._current_char_optional()
             if current == "[":
                 arguments.append(self._parse_argument("optional"))
-                self._consume_whitespace()
+                trailing_whitespace = self._read_whitespace()
                 continue
             if current == "{":
                 arguments.append(self._parse_argument("required"))
-                self._consume_whitespace()
+                trailing_whitespace = self._read_whitespace()
                 continue
             break
         stop_token = f"\\end{{{name}}}"
         children = self._collect_nodes(stop_tokens=(stop_token,), stop_chars=frozenset())
+        indent = self._extract_indent_from_whitespace(trailing_whitespace if arguments else leading_whitespace)
+        if indent:
+            children = merge_text_nodes([Text(indent), *children])
         self._expect_environment_end(name)
         return Environment(name=name, arguments=tuple(arguments), children=tuple(children))
 
@@ -250,6 +254,22 @@ class LatexParser:
     def _consume_whitespace(self) -> None:
         while self.position < self.length and self.source[self.position] in " \t\r\n":
             self.position += 1
+
+    def _read_whitespace(self) -> str:
+        start = self.position
+        while self.position < self.length and self.source[self.position] in " \t\r\n":
+            self.position += 1
+        return self.source[start:self.position]
+
+    def _extract_indent_from_whitespace(self, whitespace: str) -> str:
+        if not whitespace:
+            return ""
+        normalized = whitespace.replace("\r\n", "\n").replace("\r", "\n")
+        last_newline = normalized.rfind("\n")
+        if last_newline == -1:
+            return ""
+        indent = normalized[last_newline + 1 :]
+        return indent
 
     def _current_char(self) -> str:
         if self.position >= self.length:
