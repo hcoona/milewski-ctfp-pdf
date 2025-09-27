@@ -310,7 +310,25 @@ class AsciiDocRenderer:
             return self._render_longtable(environment)
         if name in self._MATH_BLOCK_ENVIRONMENTS:
             return self._render_math_environment(environment)
+        if name in {"quote", "quotation"}:
+            return self._render_quote_environment(environment)
         return self._render_nodes(environment.children)
+
+    def _render_quote_environment(self, environment: Environment) -> str:
+        raw_body = self._render_nodes(environment.children)
+        if not raw_body.strip():
+            return ""
+        dedented = textwrap.dedent(raw_body)
+        lines = dedented.splitlines()
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if not lines:
+            return ""
+        normalized_lines = [line.rstrip() for line in lines]
+        body = "\n".join(normalized_lines)
+        return "[quote]\n____\n" + body + "\n____\n\n"
 
     def _render_code_block(self, nodes: Sequence[Node]) -> str:
         return self._render_code_nodes(nodes).rstrip("\n")
