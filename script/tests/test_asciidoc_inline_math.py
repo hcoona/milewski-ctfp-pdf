@@ -1,7 +1,8 @@
 import unittest
+from pathlib import Path
 
 from ctfp_latex_parser.renderers.asciidoc import AsciiDocRenderer
-from ctfp_latex_parser.nodes import Environment, Math
+from ctfp_latex_parser.nodes import Document, Environment, Math
 from ctfp_latex_parser.parser import parse_text
 
 
@@ -41,18 +42,17 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         )
         environment = self._first_environment(parse_text(source))
         rendered = self.renderer._render_environment(environment)
-        self.assertEqual(
-            (
-                "[latexmath]\n"
-                "++++\n"
-                "\\begin{align*}\n"
-                "  F & = m \\frac{dv}{dt} \\\\n"
-                "  v & = \\frac{dx}{dt}\n"
-                "\\end{align*}\n"
-                "++++\n\n"
-            ),
-            rendered,
-        )
+        expected_lines = [
+            "[latexmath]",
+            "++++",
+            "\\begin{align*}",
+            "  F & = m \\frac{dv}{dt} \\\\",
+            "  v & = \\frac{dx}{dt}",
+            "\\end{align*}",
+            "++++",
+            "",
+        ]
+        self.assertEqual(expected_lines, rendered.splitlines())
 
     def test_align_environment_keeps_macro_expansion(self) -> None:
         source = "\\begin{align} \\cat{C} &\\to \\cat{D} \\end{align}\n"
@@ -95,18 +95,52 @@ class AsciiDocInlineMathTests(unittest.TestCase):
         )
         environment = self._first_environment(parse_text(source))
         rendered = self.renderer._render_environment(environment)
-        self.assertEqual(
-            (
-                "[latexmath]\n"
-                "++++\n"
-                "\\begin{gather*}\n"
-                "  R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\\\n"
-                "  I_{\\mathbf{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}\n"
-                "\\end{gather*}\n"
-                "++++\n\n"
-            ),
-            rendered,
+        expected_lines = [
+            "[latexmath]",
+            "++++",
+            "\\begin{gather*}",
+            "  R \\circ L \\to I_{\\mathbf{D}} \\quad\\quad\\text{not necessarily} \\\\",
+            "  I_{\\mathbf{C}} \\to L \\circ R \\quad\\quad\\text{not necessarily}",
+            "\\end{gather*}",
+            "++++",
+            "",
+        ]
+        self.assertEqual(expected_lines, rendered.splitlines())
+
+    def test_gather_environment_in_list_preserves_spacing(self) -> None:
+        source = (
+            "\\begin{enumerate}\n"
+            "  \\tightlist\n"
+            "  \\item\n"
+            "        Derive the naturality square for $\\psi$, the transformation\n"
+            "        between the two (contravariant) functors:\n"
+            "        \\begin{gather*}\n"
+            "          a \\to \\cat{C}(L a, b) \\\\\n"
+            "          a \\to \\cat{D}(a, R b)\n"
+            "        \\end{gather*}\n"
+            "  \\item\n"
+            "        Derive the counit $\\varepsilon$ starting from the hom-sets isomorphism in\n"
+            "        the second definition of the adjunction.\n"
+            "\\end{enumerate}\n"
         )
+        document_nodes = parse_text(source)
+        document = Document(path=Path("dummy.tex"), children=document_nodes)
+        rendered = self.renderer.render_document(document)
+        expected_lines = [
+            ". Derive the naturality square for latexmath:[\\psi], the transformation",
+            "between the two (contravariant) functors:",
+            "+",
+            "[latexmath]",
+            "++++",
+            "\\begin{gather*}",
+            "  a \\to \\mathbf{C}(L a, b) \\\\",
+            "  a \\to \\mathbf{D}(a, R b)",
+            "\\end{gather*}",
+            "++++",
+            ". Derive the counit latexmath:[\\varepsilon] starting from the hom-sets isomorphism in",
+            "the second definition of the adjunction.",
+        ]
+        self.assertEqual(expected_lines, rendered.splitlines())
 
     @staticmethod
     def _first_environment(nodes: list) -> Environment:

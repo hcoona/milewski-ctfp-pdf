@@ -540,42 +540,53 @@ class AsciiDocRenderer:
         header_parts = [f"\\begin{{{environment.name}}}"]
         for argument in environment.arguments:
             header_parts.append(self._render_argument_to_latex(argument))
-        body = self._render_nodes_to_latex(environment.children)
-        closing_indent = ""
+        body_source = self._render_nodes_to_latex(environment.children)
+        body = self._normalize_environment_body(body_source, environment.children)
+        result = "".join(header_parts)
         if body:
-            if body.startswith("\n"):
-                closing_indent = self._infer_latex_body_indent(body[1:])
-            elif body[0] in {" ", "\t"}:
-                closing_indent = self._infer_latex_body_indent(body)
-                body = "\n" + body
-            else:
-                closing_indent = self._infer_latex_body_indent(body)
-                prefix = "\n" + closing_indent if closing_indent else "\n"
-                body = prefix + body
-            body = re.sub(r"[ \t]+\n", "\n", body)
-            body = body.rstrip()
-        result = "".join(header_parts) + body
-        if not body.endswith("\n"):
+            result += body
+        if not result.endswith("\n"):
             result += "\n"
-        if closing_indent:
-            result += f"{closing_indent}\\end{{{environment.name}}}\n"
-        else:
-            result += f"\\end{{{environment.name}}}\n"
+        result += f"\\end{{{environment.name}}}\n"
         return result
 
-    def _infer_latex_body_indent(self, body: str) -> str:
-        for line in body.splitlines():
-            if not line:
-                continue
-            indent_chars: list[str] = []
-            for char in line:
-                if char in {" ", "\t"}:
-                    indent_chars.append(char)
-                else:
-                    break
-            if indent_chars:
-                return "".join(indent_chars)
-        return ""
+    def _normalize_environment_body(self, body: str, children: Sequence[Node]) -> str:
+        if not body:
+            return ""
+        stripped = body.rstrip()
+        if not stripped:
+            return ""
+        segment = body[len(stripped) :]
+        trailing_segment = ""
+        if segment:
+            if "\n" in segment:
+                base_candidate = segment[segment.rfind("\n") + 1 :]
+            else:
+                base_candidate = segment
+            if base_candidate and base_candidate.strip() == "":
+                trailing_segment = base_candidate
+        if "\n" in stripped:
+            base_indent = trailing_segment if trailing_segment.strip() == "" else ""
+            lines = stripped.split("\n")
+            if base_indent:
+                base_len = len(base_indent)
+                normalized_lines: list[str] = []
+                for line in lines:
+                    if line.startswith(base_indent):
+                        normalized_lines.append(line[base_len:])
+                    else:
+                        normalized_lines.append(line)
+                stripped = "\n".join(normalized_lines)
+            if not stripped.startswith("\n"):
+                stripped = "\n" + stripped
+            if not stripped.endswith("\n"):
+                stripped += "\n"
+            return stripped
+        first_child = children[0] if children else None
+        if stripped[0].isspace():
+            return stripped + trailing_segment
+        prefix = " "
+        return prefix + stripped + trailing_segment
 
     def _render_nodes_to_latex(self, nodes: Sequence[Node]) -> str:
         return "".join(self._render_node_to_latex(node) for node in nodes)
@@ -750,18 +761,11 @@ class AsciiDocRenderer:
                 parts.append("{")
                 parts.append(self._render_nodes_as_latex(argument.children))
                 parts.append("}")
-        children_latex = self._render_nodes_as_latex(environment.children)
-        if children_latex:
-            multiline_body = "\n" in children_latex
-            body = children_latex
-            if not multiline_body and body and not body[0].isspace():
-                first_child = environment.children[0] if environment.children else None
-                if isinstance(first_child, Command):
-                    body = " " + body
-            if multiline_body and not body.startswith("\n"):
-                body = "\n" + body
-            if multiline_body and not body.endswith("\n"):
-                body += "\n"
+        body = self._normalize_environment_body(
+            self._render_nodes_as_latex(environment.children),
+            environment.children,
+        )
+        if body:
             parts.append(body)
         parts.append("\\end{")
         parts.append(environment.name)
@@ -771,6 +775,19 @@ class AsciiDocRenderer:
     def _render_command_as_latex(self, command: Command) -> str:
         if command.name in {"", "\n"}:
             return "\\\n"
+        if command.name == "\\":
+            parts: list[str] = ["\\\\"]
+            for argument in command.arguments:
+                if argument.kind == "optional":
+                    parts.append("[")
+                    parts.append(self._render_nodes_as_latex(argument.children))
+                    parts.append("]")
+                else:
+                    parts.append("{")
+                    parts.append(self._render_nodes_as_latex(argument.children))
+                    parts.append("}")
+            parts.append("\n")
+            return "".join(parts)
         parts: list[str] = ["\\", command.name]
         if command.star:
             parts.append("*")
@@ -797,12 +814,22 @@ class AsciiDocRenderer:
 
     def _render_nodes_as_latex(self, nodes: Sequence[Node]) -> str:
         parts: list[str] = []
+        line_break_pending = False
         for node in nodes:
             if isinstance(node, Text):
-                parts.append(node.content)
+                content = node.content
+                if line_break_pending:
+                    if content.startswith("\n"):
+                        content = content[1:]
+                    elif content.startswith("n"):
+                        if len(content) == 1 or (len(content) > 1 and content[1].isspace()):
+                            content = content[1:]
+                parts.append(content)
+                line_break_pending = False
                 continue
             if isinstance(node, Comment):
                 parts.append(f"%{node.content}")
+                line_break_pending = False
                 continue
             if isinstance(node, Group):
                 if node.kind == "brace":
@@ -813,15 +840,20 @@ class AsciiDocRenderer:
                     parts.append("[")
                     parts.append(self._render_nodes_as_latex(node.children))
                     parts.append("]")
+                line_break_pending = False
                 continue
             if isinstance(node, Command):
-                parts.append(self._render_command_as_latex(node))
+                rendered_command = self._render_command_as_latex(node)
+                parts.append(rendered_command)
+                line_break_pending = node.name == "\\" and rendered_command.endswith("\n")
                 continue
             if isinstance(node, Environment):
                 parts.append(self._render_environment_as_latex(node))
+                line_break_pending = False
                 continue
             if isinstance(node, Math):
                 parts.append(self._render_math_as_latex(node))
+                line_break_pending = False
         return "".join(parts)
 
     def _render_list(self, children: Sequence[Node], *, numbered: bool) -> str:
