@@ -58,4 +58,30 @@ $(ASCIIDOC_OUTPUT_DIR)/%.adoc: $$(call rwildcard,$(ASCIIDOC_ROOT)/%/,*)
 	$(CTFP_PARSE) --root $(ASCIIDOC_ROOT)/$*/ --expand-snippet-language $(ASCIIDOC_SNIPPET_LANGUAGE) --format $(ASCIIDOC_FORMAT) --output $@
 
 ctfp-html: asciidoc
-	$(UV) run asciidoctor -r asciidoctor-diagram -a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex -a data-uri -a mathjax -a 'stem=latexmath' -a 'source-highlighter=pygments' -a 'pygments-style=github' -a nocache -o out/html/ctfp.html src/ctfp.adoc
+	$(UV) run asciidoctor \
+		-r asciidoctor-diagram \
+		-r /workspace/asciidoctor-extensions/asciidoctor-latexmath/lib/asciidoctor-latexmath.rb \
+		-a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex \
+		-a 'imagesoutdir=out/images' \
+		-a stylesheet=custom.html.css \
+		-a stylesdir=$(CURDIR)/src \
+		-a linkcss! \
+		-a data-uri \
+		-a 'source-highlighter=pygments' \
+		-a 'pygments-style=github' \
+		-o out/html/ctfp.html \
+		src/ctfp.adoc
+
+ctfp-epub3: asciidoc
+	$(UV) run asciidoctor-epub3 \
+		-r asciidoctor-diagram \
+		-r /workspace/asciidoctor-extensions/asciidoctor-latexmath/lib/asciidoctor-latexmath.rb \
+		-a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex \
+		-a 'imagesoutdir=out/images' \
+		-a stylesheet=custom.epub.css \
+		-a stylesdir=$(CURDIR)/src \
+		-a toc! \
+		-a 'source-highlighter=pygments' \
+		-a 'pygments-style=github' \
+		-o out/epub/ctfp.epub \
+		src/ctfp.adoc
