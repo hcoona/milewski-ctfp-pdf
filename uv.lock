@@ -16,7 +16,7 @@ minted = [
 [[package]]
 name = "ctfp-latex-tools"
 version = "0.1.0"
-source = { editable = "script" }
+source = { editable = "tools" }
 
 [[package]]
 name = "pygments"

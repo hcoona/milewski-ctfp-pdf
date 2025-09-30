@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["script"]
+members = ["tools"]
 
 [dependency-groups]
 minted = [
