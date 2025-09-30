@@ -59,9 +59,9 @@ class NinjaGenerator:
         self.rules.append("  description = Converting $in to AsciiDoc")
         self.rules.append("")
 
-        # Rule for copying files
+        # Rule for copying files (try hardlink first, fallback to copy)
         self.rules.append("rule copy")
-        self.rules.append("  command = mkdir -p $$(dirname $out) && cp $in $out")
+        self.rules.append("  command = mkdir -p $$(dirname $out) && (ln $in $out 2>/dev/null || cp $in $out)")
         self.rules.append("  description = Copying $in to $out")
         self.rules.append("")
 
