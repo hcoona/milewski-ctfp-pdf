@@ -74,6 +74,12 @@ class NinjaGenerator:
         self.rules.append("  description = Converting $in to HTML")
         self.rules.append("")
 
+        # Rule for converting adoc to epub
+        self.rules.append("rule adoc2epub")
+        self.rules.append("  command = uv run asciidoctor-epub3 -r asciidoctor-diagram -r /workspace/asciidoctor-extensions/asciidoctor-latexmath/lib/asciidoctor-latexmath.rb -a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex -a stylesheet=custom.html.css -a linkcss -a data-uri -a 'source-highlighter=pygments' -a 'pygments-style=github' -o $out $in")
+        self.rules.append("  description = Converting $in to EPUB")
+        self.rules.append("")
+
     def escape_ninja_path(self, path: str) -> str:
         """Escape spaces and special characters in ninja paths."""
         return path.replace(" ", "$ ").replace(":", "$:")
@@ -382,6 +388,26 @@ class NinjaGenerator:
         if str(main_adoc) in self.all_outputs or main_adoc.exists():
             self.add_html_conversion(main_adoc)
 
+    def generate_epub_file(self):
+        """Generate EPUB file from main ctfp.adoc."""
+        main_adoc = self.out_adoc_dir / "ctfp.adoc"
+        if str(main_adoc) not in self.all_outputs and not main_adoc.exists():
+            return
+
+        epub_file = self.out_html_dir / "ctfp.epub"
+        in_path = self.escape_ninja_path(str(main_adoc))
+        out_path = self.escape_ninja_path(str(epub_file))
+
+        # Add all included .adoc files as dependencies (same as ctfp.html)
+        implicit_deps = self._get_ctfp_dependencies()
+
+        if implicit_deps:
+            deps_str = " ".join(implicit_deps)
+            self.builds.append(f"build {out_path}: adoc2epub {in_path} | {deps_str}")
+        else:
+            self.builds.append(f"build {out_path}: adoc2epub {in_path}")
+        self.all_outputs.add(str(epub_file))
+
     def write_default_target(self):
         """Write the default build target."""
         self.builds.append("")
@@ -402,6 +428,7 @@ class NinjaGenerator:
         self.copy_additional_resources()
         self.copy_images_to_html_dir()
         self.generate_html_files()
+        self.generate_epub_file()
 
         # Write build rules
         self.builds.insert(0, "# Build rules")
