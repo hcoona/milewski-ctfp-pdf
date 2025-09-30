@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .analysis import document_stats
-from .loader import parse_directory
+from .loader import parse_path
 from .renderers import render_asciidoc_documents
 
 
@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         "--root",
         type=Path,
         default=Path("src/content"),
-        help="Root directory that contains LaTeX chapters.",
+        help="Root directory or .tex file to parse. If a directory, parse all .tex files recursively.",
     )
     parser.add_argument(
         "--format",
@@ -66,12 +66,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    documents = parse_directory(args.root)
+    documents = parse_path(args.root)
     if args.limit is not None:
         documents = documents[: args.limit]
 
     if not documents:
-        raise SystemExit(f"No LaTeX files found below {args.root}")
+        raise SystemExit(f"No LaTeX files found at {args.root}")
 
     extra_languages = args.expand_snippet_language or []
 

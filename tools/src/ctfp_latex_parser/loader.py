@@ -21,3 +21,23 @@ def parse_directory(root: Path) -> list[Document]:
     for tex_file in sorted(root.rglob("*.tex")):
         documents.append(parse_file(tex_file))
     return documents
+
+
+def parse_path(path: Path) -> list[Document]:
+    """Parse a path that can be either a file or a directory.
+
+    If path is a .tex file, parse just that file.
+    If path is a directory, parse all .tex files in it recursively.
+    """
+    path = path.resolve()
+    if not path.exists():
+        raise FileNotFoundError(f"Path {path} does not exist")
+
+    if path.is_file():
+        if not path.suffix == ".tex":
+            raise ValueError(f"File {path} is not a .tex file")
+        return [parse_file(path)]
+    elif path.is_dir():
+        return parse_directory(path)
+    else:
+        raise ValueError(f"Path {path} is neither a file nor a directory")

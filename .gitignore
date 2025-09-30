@@ -26,3 +26,5 @@ out/*
 *.toc
 
 .asciidoctor
+build.ninja
+.ninja_log
