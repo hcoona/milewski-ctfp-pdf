@@ -1083,12 +1083,15 @@ class AsciiDocRenderer:
 
     def _resolve_resource_path(self, base_dir: Path, raw_path: str | Path) -> str:
         candidate = Path(raw_path)
-        if not candidate.is_absolute():
-            candidate = base_dir / candidate
-        try:
-            return str(candidate.resolve(strict=False))
-        except (OSError, RuntimeError):
-            return str(candidate)
+        if candidate.is_absolute():
+            # If the path is absolute, try to make it relative to base_dir
+            try:
+                return str(candidate.relative_to(base_dir))
+            except (ValueError, OSError, RuntimeError):
+                # If we can't make it relative, return as-is
+                return str(candidate)
+        # For relative paths, just return them as-is (they're already relative to base_dir)
+        return str(candidate)
 
     def _render_minipage_cell(self, environment: Environment) -> str:
         caption: str | None = None
