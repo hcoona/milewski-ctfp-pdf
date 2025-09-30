@@ -33,9 +33,12 @@ class NinjaGenerator:
         self.tools_dir = tools_dir
         self.content_dir = src_dir / "content"
         self.out_adoc_dir = out_dir / "adoc"
+        self.out_html_dir = out_dir / "html"
         self.rules: List[str] = []
         self.builds: List[str] = []
         self.all_outputs: Set[str] = set()
+        self.adoc_outputs: Set[str] = set()  # Track .adoc files for HTML generation
+        self.chapter_resources: dict = {}  # Track CSS and images for each chapter
 
     def write_header(self):
         """Write ninja file header and rules."""
@@ -59,10 +62,16 @@ class NinjaGenerator:
         self.rules.append("  description = Converting $in to AsciiDoc")
         self.rules.append("")
 
-        # Rule for copying files (try hardlink first, fallback to copy)
+        # Rule for copying files (use reflink when possible, fallback to regular copy)
         self.rules.append("rule copy")
-        self.rules.append("  command = mkdir -p $$(dirname $out) && (ln $in $out 2>/dev/null || cp $in $out)")
+        self.rules.append("  command = mkdir -p $$(dirname $out) && cp --reflink=auto $in $out")
         self.rules.append("  description = Copying $in to $out")
+        self.rules.append("")
+
+        # Rule for converting adoc to html
+        self.rules.append("rule adoc2html")
+        self.rules.append("  command = uv run asciidoctor -r asciidoctor-diagram -r /workspace/asciidoctor-extensions/asciidoctor-latexmath/lib/asciidoctor-latexmath.rb -a pdflatex=/usr/local/texlive/2025/bin/x86_64-linux/xelatex -a stylesheet=custom.html.css -a linkcss -a data-uri -a 'source-highlighter=pygments' -a 'pygments-style=github' -o $out $in")
+        self.rules.append("  description = Converting $in to HTML")
         self.rules.append("")
 
     def escape_ninja_path(self, path: str) -> str:
@@ -81,14 +90,21 @@ class NinjaGenerator:
         if chapter_dir in ["ocaml", "reason", "scala"]:
             return
 
-        # Output file: out/adoc/<chapter>/<filename>.adoc
+        # Check if a corresponding .adoc file already exists (e.g., editor-note.adoc)
+        adoc_source = tex_file.with_suffix('.adoc')
+        if adoc_source.exists():
+            # Skip conversion, the .adoc will be copied directly
+            return
+
+        # Output file: out/adoc/content/<chapter>/<filename>.adoc
+        # Keep the content/ prefix to match the directory structure
         adoc_filename = rel_path.stem + ".adoc"
         if len(rel_path.parts) > 1:
-            # File is in a subdirectory, use just chapter name
-            out_file = self.out_adoc_dir / chapter_dir / adoc_filename
+            # File is in a subdirectory, preserve content/ structure
+            out_file = self.out_adoc_dir / "content" / chapter_dir / adoc_filename
         else:
             # File is at root of content
-            out_file = self.out_adoc_dir / adoc_filename
+            out_file = self.out_adoc_dir / "content" / adoc_filename
 
         # Escape paths for ninja
         in_path = self.escape_ninja_path(str(tex_file))
@@ -96,6 +112,7 @@ class NinjaGenerator:
 
         self.builds.append(f"build {out_path}: tex2adoc {in_path}")
         self.all_outputs.add(str(out_file))
+        self.adoc_outputs.add(str(out_file))  # Track for HTML generation
 
     def add_copy_rule(self, src_file: pathlib.Path, dest_file: pathlib.Path):
         """Add a build rule to copy a file."""
@@ -119,7 +136,7 @@ class NinjaGenerator:
             for code_file in code_dir.rglob("*"):
                 if code_file.is_file():
                     rel_path = code_file.relative_to(chapter_dir)
-                    dest_file = self.out_adoc_dir / chapter_name / rel_path
+                    dest_file = self.out_adoc_dir / "content" / chapter_name / rel_path
                     self.add_copy_rule(code_file, dest_file)
 
         # Copy images directory
@@ -128,7 +145,7 @@ class NinjaGenerator:
             for image_file in images_dir.rglob("*"):
                 if image_file.is_file():
                     rel_path = image_file.relative_to(chapter_dir)
-                    dest_file = self.out_adoc_dir / chapter_name / rel_path
+                    dest_file = self.out_adoc_dir / "content" / chapter_name / rel_path
                     self.add_copy_rule(image_file, dest_file)
 
     def scan_content_directory(self):
@@ -148,7 +165,7 @@ class NinjaGenerator:
 
     def copy_src_adoc_files(self):
         """Copy .adoc files from src directory."""
-        # List of .adoc files to copy
+        # List of .adoc files to copy from src root
         adoc_files = [
             "acknowledgments.adoc",
             "colophon.adoc",
@@ -164,11 +181,11 @@ class NinjaGenerator:
                 dest_file = self.out_adoc_dir / adoc_file
                 self.add_copy_rule(src_file, dest_file)
 
-        # Copy editor-note.adoc from content
-        editor_note = self.content_dir / "editor-note.adoc"
-        if editor_note.exists():
-            dest_file = self.out_adoc_dir / "content" / "editor-note.adoc"
-            self.add_copy_rule(editor_note, dest_file)
+        # Copy any existing .adoc files from content directory
+        # (e.g., editor-note.adoc which is not generated from .tex)
+        for adoc_file in self.content_dir.glob("*.adoc"):
+            dest_file = self.out_adoc_dir / "content" / adoc_file.name
+            self.add_copy_rule(adoc_file, dest_file)
 
     def copy_fig_directory(self):
         """Copy the fig directory."""
@@ -192,6 +209,104 @@ class NinjaGenerator:
             if src_file.exists():
                 dest_file = self.out_adoc_dir / filename
                 self.add_copy_rule(src_file, dest_file)
+                # Also copy to HTML output directory for stylesheet
+                if filename.endswith('.css') or filename.endswith('.ttf'):
+                    html_dest_file = self.out_html_dir / filename
+                    self.add_copy_rule(src_file, html_dest_file)
+
+    def add_html_conversion(self, adoc_file: pathlib.Path, chapter_dir: str = None):
+        """Add a build rule to convert a .adoc file to .html."""
+        if chapter_dir:
+            # Chapter HTML: out/html/content/<chapter>/<filename>.html
+            html_file = self.out_html_dir / "content" / chapter_dir / adoc_file.name.replace('.adoc', '.html')
+        else:
+            # Main HTML: out/html/ctfp.html
+            html_file = self.out_html_dir / adoc_file.name.replace('.adoc', '.html')
+
+        in_path = self.escape_ninja_path(str(adoc_file))
+        out_path = self.escape_ninja_path(str(html_file))
+
+        # Collect implicit dependencies (CSS and images)
+        implicit_deps = []
+        if chapter_dir and chapter_dir in self.chapter_resources:
+            implicit_deps = [self.escape_ninja_path(dep) for dep in self.chapter_resources[chapter_dir]]
+
+        # Build rule with implicit dependencies
+        if implicit_deps:
+            deps_str = " ".join(implicit_deps)
+            self.builds.append(f"build {out_path}: adoc2html {in_path} | {deps_str}")
+        else:
+            self.builds.append(f"build {out_path}: adoc2html {in_path}")
+        self.all_outputs.add(str(html_file))
+
+    def copy_images_to_html_dir(self):
+        """Copy images from content directories to HTML output directories."""
+        if not self.content_dir.exists():
+            return
+
+        for item in self.content_dir.iterdir():
+            if item.is_dir() and item.name not in ["ocaml", "reason", "scala"]:
+                chapter_name = item.name
+                # Initialize resource tracking for this chapter
+                if chapter_name not in self.chapter_resources:
+                    self.chapter_resources[chapter_name] = []
+
+                # Copy SVG files (diagrams) to HTML output
+                for svg_file in item.glob("*.svg"):
+                    dest_file = self.out_html_dir / "content" / chapter_name / svg_file.name
+                    self.add_copy_rule(svg_file, dest_file)
+                    self.chapter_resources[chapter_name].append(str(dest_file))
+
+                # Add images from adoc directory as dependencies (for asciidoctor)
+                images_dir = item / "images"
+                if images_dir.exists() and images_dir.is_dir():
+                    for image_file in images_dir.rglob("*"):
+                        if image_file.is_file():
+                            rel_path = image_file.relative_to(item)
+                            # Images are in adoc directory, add them as dependencies
+                            adoc_image = self.out_adoc_dir / "content" / chapter_name / rel_path
+                            self.chapter_resources[chapter_name].append(str(adoc_image))
+
+                            # Also copy to HTML output directory
+                            html_dest_file = self.out_html_dir / "content" / chapter_name / rel_path
+                            self.add_copy_rule(image_file, html_dest_file)
+
+                # Copy code directory if it exists (for chapter-specific dependencies)
+                code_dir = item / "code"
+                if code_dir.exists() and code_dir.is_dir():
+                    for code_file in code_dir.rglob("*"):
+                        if code_file.is_file():
+                            # Track code files in adoc directory as dependencies
+                            rel_path = code_file.relative_to(item)
+                            dest_file = self.out_adoc_dir / "content" / chapter_name / rel_path
+                            # Code files are copied to adoc dir, add them as dependencies
+                            self.chapter_resources[chapter_name].append(str(dest_file))
+
+                # Copy CSS to each chapter directory for relative path access
+                css_file = self.src_dir / "custom.html.css"
+                if css_file.exists():
+                    chapter_css = self.out_html_dir / "content" / chapter_name / "custom.html.css"
+                    self.add_copy_rule(css_file, chapter_css)
+                    self.chapter_resources[chapter_name].append(str(chapter_css))
+
+    def generate_html_files(self):
+        """Generate HTML files from .adoc files."""
+        # Generate HTML for content chapters (from generated .adoc files)
+        if self.content_dir.exists():
+            for item in self.content_dir.iterdir():
+                if item.is_dir() and item.name not in ["ocaml", "reason", "scala"]:
+                    chapter_name = item.name
+                    # Check if there's a generated .adoc file for this chapter
+                    for adoc_file_path in self.adoc_outputs:
+                        adoc_file = pathlib.Path(adoc_file_path)
+                        # Match chapter directory pattern (e.g., content/1.1/xxx.adoc)
+                        if f"/content/{chapter_name}/" in str(adoc_file):
+                            self.add_html_conversion(adoc_file, chapter_name)
+
+        # Generate main ctfp.html
+        main_adoc = self.out_adoc_dir / "ctfp.adoc"
+        if str(main_adoc) in self.all_outputs or main_adoc.exists():
+            self.add_html_conversion(main_adoc)
 
     def write_default_target(self):
         """Write the default build target."""
@@ -211,6 +326,8 @@ class NinjaGenerator:
         self.copy_src_adoc_files()
         self.copy_fig_directory()
         self.copy_additional_resources()
+        self.copy_images_to_html_dir()
+        self.generate_html_files()
 
         # Write build rules
         self.builds.insert(0, "# Build rules")
