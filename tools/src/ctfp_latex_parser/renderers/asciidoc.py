@@ -306,6 +306,8 @@ class AsciiDocRenderer:
             return f"{header}\n----\n{body}\n----\n\n"
         if name == "figure":
             return self._render_figure(environment)
+        if name == "wrapfigure":
+            return self._render_wrapfigure(environment)
         if name == "longtable":
             return self._render_longtable(environment)
         if name in self._MATH_BLOCK_ENVIRONMENTS:
@@ -1185,6 +1187,25 @@ class AsciiDocRenderer:
             if fallback:
                 lines.append(fallback)
         return "\n".join(lines) + "\n\n"
+
+    def _render_wrapfigure(self, environment: Environment) -> str:
+        """Render wrapfigure environment. Extract includegraphics and ignore other formatting."""
+        images: list[str] = []
+        base_dir = self._current_document.path.parent if self._current_document else Path()
+
+        for node in environment.children:
+            if isinstance(node, Command) and node.name == "includegraphics":
+                # Extract the image path from the last argument
+                if node.arguments:
+                    path_text = self._render_nodes(node.arguments[-1].children, inline=True).strip()
+                    if path_text:
+                        resolved_image = self._resolve_resource_path(base_dir, path_text)
+                        images.append(f"image::{resolved_image}[]")
+
+        if not images:
+            return ""
+
+        return "\n".join(images) + "\n\n"
 
     def _render_longtable(self, environment: Environment) -> str:
         caption: str | None = None
