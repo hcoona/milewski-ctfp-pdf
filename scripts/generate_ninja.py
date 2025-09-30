@@ -78,6 +78,77 @@ class NinjaGenerator:
         """Escape spaces and special characters in ninja paths."""
         return path.replace(" ", "$ ").replace(":", "$:")
 
+    def _get_ctfp_dependencies(self) -> List[str]:
+        """Get all dependencies for ctfp.adoc file."""
+        deps = []
+
+        # Front matter files
+        front_matter = ["half-title.adoc"]
+
+        # All chapter files (based on the structure in ctfp.adoc)
+        chapters = [
+            "0.0/preface.adoc",
+            "1.1/category-the-essence-of-composition.adoc",
+            "1.2/types-and-functions.adoc",
+            "1.3/categories-great-and-small.adoc",
+            "1.4/kleisli-categories.adoc",
+            "1.5/products-and-coproducts.adoc",
+            "1.6/simple-algebraic-data-types.adoc",
+            "1.7/functors.adoc",
+            "1.8/functoriality.adoc",
+            "1.9/function-types.adoc",
+            "1.10/natural-transformations.adoc",
+            "2.1/declarative-programming.adoc",
+            "2.2/limits-and-colimits.adoc",
+            "2.3/free-monoids.adoc",
+            "2.4/representable-functors.adoc",
+            "2.5/the-yoneda-lemma.adoc",
+            "2.6/yoneda-embedding.adoc",
+            "3.1/its-all-about-morphisms.adoc",
+            "3.2/adjunctions.adoc",
+            "3.3/free-forgetful-adjunctions.adoc",
+            "3.4/monads-programmers-definition.adoc",
+            "3.5/monads-and-effects.adoc",
+            "3.6/monads-categorically.adoc",
+            "3.7/comonads.adoc",
+            "3.8/f-algebras.adoc",
+            "3.9/algebras-for-monads.adoc",
+            "3.10/ends-and-coends.adoc",
+            "3.11/kan-extensions.adoc",
+            "3.12/enriched-categories.adoc",
+            "3.13/topoi.adoc",
+            "3.14/lawvere-theories.adoc",
+            "3.15/monads-monoids-and-categories.adoc",
+        ]
+
+        # Back matter files
+        back_matter = [
+            "index.adoc",
+            "acknowledgments.adoc",
+            "colophon.adoc",
+            "free-software.adoc",
+        ]
+
+        # Add front matter dependencies
+        for file in front_matter:
+            dep_path = self.out_adoc_dir / file
+            if str(dep_path) in self.all_outputs:
+                deps.append(self.escape_ninja_path(str(dep_path)))
+
+        # Add chapter dependencies
+        for chapter in chapters:
+            dep_path = self.out_adoc_dir / "content" / chapter
+            if str(dep_path) in self.all_outputs:
+                deps.append(self.escape_ninja_path(str(dep_path)))
+
+        # Add back matter dependencies
+        for file in back_matter:
+            dep_path = self.out_adoc_dir / file
+            if str(dep_path) in self.all_outputs:
+                deps.append(self.escape_ninja_path(str(dep_path)))
+
+        return deps
+
     def add_tex_conversion(self, tex_file: pathlib.Path):
         """Add a build rule to convert a .tex file to .adoc."""
         # Get relative path from content directory
@@ -230,6 +301,9 @@ class NinjaGenerator:
         implicit_deps = []
         if chapter_dir and chapter_dir in self.chapter_resources:
             implicit_deps = [self.escape_ninja_path(dep) for dep in self.chapter_resources[chapter_dir]]
+        elif adoc_file.name == "ctfp.adoc":
+            # For ctfp.html, add all included .adoc files as dependencies
+            implicit_deps = self._get_ctfp_dependencies()
 
         # Build rule with implicit dependencies
         if implicit_deps:
