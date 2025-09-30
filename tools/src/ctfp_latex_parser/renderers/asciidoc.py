@@ -160,6 +160,17 @@ class AsciiDocRenderer:
         text = text.replace("---", "--")
         return text.replace(r"\#", "#")
 
+    def _escape_code_text(self, text: str) -> str:
+        r"""Escape text for inline code spans (backticks).
+
+        In AsciiDoc inline code, wrap special characters in pass:[] macro.
+        This allows characters like _ and & to be displayed literally.
+        """
+        # Replace underscores and ampersands with pass:[] macro
+        text = text.replace("_", "pass:[_]")
+        text = text.replace("&", "pass:[&]")
+        return text
+
     def _escape_table_cell_code_pipes(self, cell: str) -> str:
         def escape_code(match: re.Match[str]) -> str:
             opening, content, closing = match.groups()
@@ -211,7 +222,7 @@ class AsciiDocRenderer:
             text = self._argument(command, 0, kind="required")
             return f"_{text}_"
         if name in {"texttt", "code"}:
-            text = self._argument(command, 0, kind="required")
+            text = self._argument(command, 0, kind="required", escape_code=True)
             return f"`{text}`"
         if name == "section":
             title = self._argument(command, 0, kind="required")
@@ -1359,6 +1370,7 @@ class AsciiDocRenderer:
         *,
         kind: str | None = None,
         strip: bool = True,
+        escape_code: bool = False,
     ) -> str:
         if kind == "required":
             arguments = [arg for arg in node.arguments if arg.kind == "required"]
@@ -1371,6 +1383,8 @@ class AsciiDocRenderer:
         except IndexError:
             return ""
         rendered = self._render_nodes(argument.children, inline=True)
+        if escape_code:
+            rendered = self._escape_code_text(rendered)
         return rendered.strip() if strip else rendered
 
 
