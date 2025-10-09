@@ -1,0 +1,6 @@
+[tools]
+"cargo:tree-sitter-cli" = "0.25.10"
+pipx = "latest"
+"pipx:git+https://github.com/github/spec-kit.git" = "main"
+rust = "stable"
+uv = "latest"
