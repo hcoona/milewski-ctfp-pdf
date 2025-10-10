@@ -1,8 +1,8 @@
 <!--
 Sync Impact Report
-- Version change: 1.0.0 → 1.1.0
-- Modified principles: None renamed
-- Added sections: Core Principles VI. Nanopass Transformations
+- Version change: 1.1.0 → 1.2.0
+- Modified principles: VI. Nanopass Transformations (added source location retention)
+- Added sections: None
 - Removed sections: None
 - Templates requiring updates:
   ✅ .specify/templates/plan-template.md
@@ -46,8 +46,9 @@ book domain.
 
 ### VI. Nanopass Transformations
 Implement every CST or AST transformation by leveraging the nanopass framework. Each pass MUST focus
-on a single, tightly scoped rewrite that touches only the most relevant portion of the tree. Reject
-work that batches unrelated changes into one pass. Rationale: Fine-grained nanopass stages keep
+on a single, tightly scoped rewrite that touches only the most relevant portion of the tree, while
+propagating precise source location metadata into resulting nodes. Reject work that batches unrelated
+changes into one pass or drops location tracking. Rationale: Fine-grained nanopass stages keep
 transformations auditable and reduce regression risk.
 
 ## Implementation Constraints
@@ -55,6 +56,8 @@ transformations auditable and reduce regression risk.
 - Transform every tree-sitter CST into a dedicated AST module per feature before downstream use.
 - Author CST and AST transformations as nanopass passes that only adjust the smallest relevant tree
   fragments per pass.
+- Preserve source location metadata through every CST and AST rewrite so diagnostics map back to the
+  originating files.
 - Preserve English-language standards in LaTeX sources and any generated artifacts.
 - Record Akku dependencies in `Akku.manifest` and lock upgrades through `Akku.lock`.
 - Provide Chez Scheme entry points for build automation, ensuring tests orchestrate any scripts.
@@ -66,10 +69,12 @@ transformations auditable and reduce regression risk.
 2. Author tests in Chez Scheme and demonstrate they fail before implementation work starts.
 3. Implement functionality strictly after the failing tests exist, keeping commits reviewable.
 4. During reviews, verify that any new dependency references an Akku package or documents the lack
-   of a suitable alternative.
+  of a suitable alternative.
 5. Confirm that every CST/AST rewrite plan enumerates the nanopass stages needed, each with a
   single-focus scope.
-6. Block merges when any quality gate fails until corrective commits restore compliance.
+6. Inspect nanopass designs for explicit strategies that retain or improve source location metadata
+  across passes.
+7. Block merges when any quality gate fails until corrective commits restore compliance.
 
 ## Governance
 
@@ -82,4 +87,4 @@ transformations auditable and reduce regression risk.
 - Compliance Review: Before merging, reviewers MUST confirm adherence to principles, gates, and
   tooling constraints, logging deviations and remediation steps.
 
-**Version**: 1.1.0 | **Ratified**: 2025-10-09 | **Last Amended**: 2025-10-09
+**Version**: 1.2.0 | **Ratified**: 2025-10-09 | **Last Amended**: 2025-10-09

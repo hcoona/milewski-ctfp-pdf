@@ -7,7 +7,8 @@
 
 > **Constitution Alignment**: Write every section in English. Define acceptance tests that map directly to
 > Chez Scheme test suites that will be authored before implementation. Enumerate any CST/AST work as a
-> sequence of nanopass stages, each covering a single focused transformation.
+> sequence of nanopass stages, each covering a single focused transformation, and state how source
+> location metadata remains available after each pass.
 
 ## User Scenarios & Testing *(mandatory)*
 

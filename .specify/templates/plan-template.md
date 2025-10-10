@@ -36,6 +36,7 @@ currently pending; follow the constitution governance section until the commands
 - ✅ **AST Boundary**: Document how tree-sitter CST output becomes a project-owned AST before use.
 - ✅ **Nanopass Staging**: Lay out the nanopass sequence, ensuring each pass handles a single,
   tightly scoped tree rewrite.
+- ✅ **Location Mapping**: Describe how each pass preserves or augments source location metadata.
 - ✅ **Test-First**: List the Chez Scheme test suites that will be authored and run before code.
 - ✅ **Chez Scheme Tooling**: Confirm every implementation task is scoped for Chez Scheme.
 - ✅ **Dependency Reuse**: Identify Akku packages to reuse or record a maintainer check for gaps.
