@@ -6,7 +6,8 @@
 **Input**: User description: "$ARGUMENTS"
 
 > **Constitution Alignment**: Write every section in English. Define acceptance tests that map directly to
-> Chez Scheme test suites that will be authored before implementation.
+> Chez Scheme test suites that will be authored before implementation. Enumerate any CST/AST work as a
+> sequence of nanopass stages, each covering a single focused transformation.
 
 ## User Scenarios & Testing *(mandatory)*
 

@@ -11,6 +11,9 @@ description: "Task list template for feature implementation"
 tasks whenever the feature spec calls for coverage. Tests remain OPTIONAL unless explicitly requested in
 the feature specification, but when included they MUST precede implementation tasks.
 
+**Nanopass Work**: Break CST/AST transformations into per-pass tasks, each confined to one closely
+related rewrite executed with the nanopass framework.
+
 **Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
 
 ## Format: `[ID] [P?] [Story] Description`
